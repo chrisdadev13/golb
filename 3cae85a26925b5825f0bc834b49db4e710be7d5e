@@ -1,0 +1,44 @@
+src/mainview/pages/index.tsx
+  1e4dd904b11fc62e 185
+src/mainview/components/ui/select.tsx
+  1e4dd904b11fc62e 98-109
+src/bun/index.ts
+  d6bd6529f0c01d4a 132,134-135
+src/mainview/components/ai-elements/mention-input.tsx
+  1e4dd904b11fc62e 129,131-132,135-138,143-147,149-151
+src/mainview/components/ai-elements/context-popover.tsx
+  d6bd6529f0c01d4a 154-176,369-371,378,445,552-554,563-566,586,656-670
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "3cae85a26925b5825f0bc834b49db4e710be7d5e",
+  "prompts": {
+    "1e4dd904b11fc62e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "00f8774b-619c-4c59-9619-7530cd0bb8c2",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 63,
+      "total_deletions": 50,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    },
+    "d6bd6529f0c01d4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35ec3c71-9564-42c2-9f58-80c0ee6e20ef",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 84,
+      "total_deletions": 58,
+      "accepted_lines": 54,
+      "overriden_lines": 0
+    }
+  }
+}
