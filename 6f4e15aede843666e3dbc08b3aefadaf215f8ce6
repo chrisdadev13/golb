@@ -1,0 +1,218 @@
+src/mainview/lib/tabs-context.tsx
+  4a4df8f6bb057827 1-134
+vite.config.ts
+  d82169979f4b34c7 1,4,7,9-13
+src/mainview/components/ui/toast.tsx
+  d1f42c0619ac8320 13
+src/mainview/pages/settings.tsx
+  447969a0b964a3ad 1-8
+src/mainview/lib/projects.ts
+  4076b3f658435047 1-61
+src/mainview/pages/index.tsx
+  4a4df8f6bb057827 28,47,70
+  4076b3f658435047 1,7-8,13,23,35,38,40-41,43,45-46,48-50,57-62,64-69,71-83,95-96,145-150,165,197-198,201-207,209-212,222-225,227-258,268,272,276,287,309-310,312-320,327,330,332-333,339-341
+  4716c99881ee78e0 11,15-21,54-56,98-107,111-112,114-116,126-127,132-134,139-144,259-267,277,293-308,311,324-326,328-329,331
+  0b656e5a830b7a03 118-124,135-138,334-338
+  245e6fcf2bbab51e 2,51,53,84-85,87-88,92-94,153-164,166-167,170-173,175-177,179-196
+src/mainview/components/workspace-tabs.tsx
+  4a4df8f6bb057827 1-85
+tsconfig.json
+  d82169979f4b34c7 17-21
+src/mainview/App.tsx
+  447969a0b964a3ad 3
+  4a4df8f6bb057827 2,6-7,13-22,24-25,32-34
+src/shared/types.ts
+  4076b3f658435047 1-17
+src/mainview/components/ui/button-variants.ts
+  d1f42c0619ac8320 1-44
+src/mainview/lib/rpc.ts
+  4076b3f658435047 1-17
+src/mainview/lib/utils.ts
+  d82169979f4b34c7 3-4,6
+components.json
+  d82169979f4b34c7 1-5,15-21,25
+src/mainview/components/ui/button.tsx
+  d1f42c0619ac8320 5,7-9,15,23,35,40-50,53
+src/mainview/components/ui/combobox.tsx
+  4716c99881ee78e0 1-433
+src/mainview/components/ui/select.tsx
+  d39b2f103fadd054 1-13,15-48,50-62,64-92,94-96,98-101,103-258
+src/mainview/lib/avatar.ts
+  4a4df8f6bb057827 1-17
+src/mainview/pages/home.tsx
+  4a4df8f6bb057827 2-8,10,18
+  4076b3f658435047 9,12-17,19-24
+  447969a0b964a3ad 11,26-27
+src/bun/index.ts
+  4076b3f658435047 2,24-46,51,53,63
+src/mainview/components/title-bar.tsx
+  4a4df8f6bb057827 1-8,10-13,16-18,21-37,39,41-45,53-57,60,64-65
+src/mainview/index.css
+  79ae213e3ca4cedd 148-152
+  d82169979f4b34c7 1-2,4-43,59-61,81-94,101-103,123-133,142-145,147,153-156
+src/mainview/components/ui/pagination.tsx
+  d1f42c0619ac8320 13-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "6f4e15aede843666e3dbc08b3aefadaf215f8ce6",
+  "prompts": {
+    "0b656e5a830b7a03": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "db2f0dc4-093f-4b60-bf06-04a194318ebf",
+        "model": "default"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 17,
+      "total_deletions": 15,
+      "accepted_lines": 16,
+      "overriden_lines": 0
+    },
+    "245e6fcf2bbab51e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "38a536c7-22b1-4dc0-9980-32d62b019c14",
+        "model": "default"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 57,
+      "total_deletions": 10,
+      "accepted_lines": 49,
+      "overriden_lines": 9
+    },
+    "4076b3f658435047": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d202655-7e32-4331-bbcb-60562de84f9c",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 466,
+      "total_deletions": 95,
+      "accepted_lines": 255,
+      "overriden_lines": 33
+    },
+    "447969a0b964a3ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50be444b-1981-4a44-952e-696a12cb47b3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 49,
+      "total_deletions": 6,
+      "accepted_lines": 12,
+      "overriden_lines": 5
+    },
+    "4716c99881ee78e0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2534d2fd-7ddd-49c6-a589-5ad570c73295",
+        "model": "composer-1.5"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 664,
+      "total_deletions": 124,
+      "accepted_lines": 503,
+      "overriden_lines": 6
+    },
+    "4a4df8f6bb057827": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95d8dfce-27a6-4bb2-a6df-c2142f5309b5",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 356,
+      "total_deletions": 92,
+      "accepted_lines": 319,
+      "overriden_lines": 8
+    },
+    "4b2de6171e151518": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "4652895d-41d2-4743-bf68-59c2c2aa1013",
+        "model": "gemini-3-flash-preview"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 5,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "79ae213e3ca4cedd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ddc875cd-3d6d-4eb5-b8c5-087888da4ece",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 9,
+      "accepted_lines": 5,
+      "overriden_lines": 1
+    },
+    "966df695e45533b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a11e6d0-8882-436d-9ba4-075f97515fe2",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "d1f42c0619ac8320": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae983324-1390-4202-83d2-6863ec487018",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 71,
+      "total_deletions": 49,
+      "accepted_lines": 66,
+      "overriden_lines": 1
+    },
+    "d39b2f103fadd054": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7ba0714d-dad5-40fa-91e8-78586b7460b6",
+        "model": "default"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 262,
+      "total_deletions": 2,
+      "accepted_lines": 252,
+      "overriden_lines": 1
+    },
+    "d82169979f4b34c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b6660d96-7d23-4461-b4c8-2ff27667cdb7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 157,
+      "total_deletions": 7,
+      "accepted_lines": 111,
+      "overriden_lines": 44
+    }
+  }
+}
