@@ -1,0 +1,66 @@
+src/mainview/components/ai-elements/context-popover.tsx
+  d6bd6529f0c01d4a 1-693
+src/mainview/components/ui/popover.tsx
+  d6bd6529f0c01d4a 36-37,46-47,68-69
+src/mainview/pages/index.tsx
+  d6bd6529f0c01d4a 12,29,38-41,43-45,66-75,97-168,234,236-237,239-243,295,307-316
+src/bun/index.ts
+  d6bd6529f0c01d4a 2,44-174
+  eb184637653bc8b5 1
+src/mainview/lib/context-types.ts
+  d6bd6529f0c01d4a 1-14
+src/shared/types.ts
+  eb184637653bc8b5 12,14-15,17-18,20-21,24,26-27
+  d6bd6529f0c01d4a 10-11,13,16,19,22-23,25,28-33
+src/mainview/components/ai-elements/mention-input.tsx
+  d6bd6529f0c01d4a 1-260,262-270,272-457
+src/mainview/lib/rpc.ts
+  eb184637653bc8b5 18,28-29,35-36,53
+  d6bd6529f0c01d4a 19-27,30-34,37-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "37258f6f615db066de97c71cf741143405272e92",
+  "prompts": {
+    "9f2e53d8b628799b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9e472923-f6b0-4387-83d1-f4219bfbf945",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 5,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "d6bd6529f0c01d4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35ec3c71-9564-42c2-9f58-80c0ee6e20ef",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 2046,
+      "total_deletions": 857,
+      "accepted_lines": 1454,
+      "overriden_lines": 2
+    },
+    "eb184637653bc8b5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51814a71-5aa6-4baf-9c1b-9dcb59c6dc4b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 847,
+      "total_deletions": 8,
+      "accepted_lines": 592,
+      "overriden_lines": 0
+    }
+  }
+}
