@@ -1,0 +1,23 @@
+src/mainview/components/ai-elements/context-popover.tsx
+  d6bd6529f0c01d4a 12,286,288,318,360,362
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "a659121d3d20bedb9ca6d7adc2f0dbb5b9243547",
+  "prompts": {
+    "d6bd6529f0c01d4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35ec3c71-9564-42c2-9f58-80c0ee6e20ef",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 18,
+      "total_deletions": 19,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
