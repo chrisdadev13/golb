@@ -1,6 +1,6 @@
 import {
   Box,
-  ChevronDown,
+  // ChevronDown,
   ChevronLeft,
   ChevronRight,
   GitCommitHorizontal,
@@ -43,12 +43,12 @@ export function TitleBar() {
             <Button variant="outline" size="xs">
               <Box className="size-3.5" />
               Open
-              <ChevronDown className="size-2.5 opacity-50" />
+              {/* <ChevronDown className="size-2.5 opacity-50" /> */}
             </Button>
             <Button variant="outline" size="xs">
               <GitCommitHorizontal className="size-3.5" />
               Commit
-              <ChevronDown className="size-2.5 opacity-50" />
+              {/* <ChevronDown className="size-2.5 opacity-50" /> */}
             </Button>
           </ButtonGroup>
           <Separator orientation="vertical" className="h-4" />
