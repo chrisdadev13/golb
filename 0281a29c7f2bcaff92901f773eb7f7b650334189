@@ -1,0 +1,23 @@
+src/mainview/components/diff-panel.tsx
+  503b7a2c17b9a1d8 281-295,347-358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "0281a29c7f2bcaff92901f773eb7f7b650334189",
+  "prompts": {
+    "503b7a2c17b9a1d8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b5cd3c2f-4383-4c3a-a7ae-cd14204aeb2b",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 26,
+      "total_deletions": 2,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    }
+  }
+}
