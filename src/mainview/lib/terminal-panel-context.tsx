@@ -7,7 +7,7 @@ import {
 } from "react";
 
 const DEFAULT_HEIGHT = 256;
-const MIN_HEIGHT = 100;
+const MIN_HEIGHT = 200;
 const MAX_HEIGHT = 400;
 
 type TerminalPanelContextValue = {

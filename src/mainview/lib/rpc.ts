@@ -11,6 +11,19 @@ type TerminalExitPayload = {
   exitCode: number | null;
 };
 
+export type GitFileDiffSummary = {
+  file: string;
+  status: string;
+  oldPath?: string;
+  additions: number;
+  deletions: number;
+};
+
+export type GitFileDiffContents = {
+  oldContents: string;
+  newContents: string;
+};
+
 const terminalDataSubscribers = new Set<(payload: TerminalDataPayload) => void>();
 const terminalExitSubscribers = new Set<(payload: TerminalExitPayload) => void>();
 
@@ -82,6 +95,43 @@ export async function getGitStatus(
 ): Promise<{ file: string; status: string }[]> {
   const result = await getRpc().request.getGitStatus({ projectPath });
   return result.changes;
+}
+
+export async function getGitFileDiffs(
+  projectPath: string,
+  staged?: boolean,
+): Promise<GitFileDiffSummary[]> {
+  const result = await getRpc().request.getGitFileDiffs({ projectPath, staged });
+  return result.files;
+}
+
+export async function getGitFileDiffContents(options: {
+  projectPath: string;
+  file: string;
+  status: string;
+  oldPath?: string;
+  staged?: boolean;
+}): Promise<GitFileDiffContents> {
+  return getRpc().request.getGitFileDiffContents(options);
+}
+
+export async function gitStageChanges(options: {
+  projectPath: string;
+  scope: "file" | "all";
+  stage: boolean;
+  file?: string;
+}): Promise<void> {
+  await getRpc().request.gitStageChanges(options);
+}
+
+export async function gitDiscardChanges(options: {
+  projectPath: string;
+  scope: "file" | "all";
+  file?: string;
+  status?: string;
+  staged: boolean;
+}): Promise<void> {
+  await getRpc().request.gitDiscardChanges(options);
 }
 
 export async function terminalCreate(options: {

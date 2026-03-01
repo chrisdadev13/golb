@@ -25,6 +25,50 @@ export type AppRPC = {
           changes: { file: string; status: string }[];
         };
       };
+      getGitFileDiffs: {
+        params: { projectPath: string; staged?: boolean };
+        response: {
+          files: {
+            file: string;
+            status: string;
+            oldPath?: string;
+            additions: number;
+            deletions: number;
+          }[];
+        };
+      };
+      getGitFileDiffContents: {
+        params: {
+          projectPath: string;
+          file: string;
+          status: string;
+          oldPath?: string;
+          staged?: boolean;
+        };
+        response: {
+          oldContents: string;
+          newContents: string;
+        };
+      };
+      gitStageChanges: {
+        params: {
+          projectPath: string;
+          scope: "file" | "all";
+          stage: boolean;
+          file?: string;
+        };
+        response: { ok: true };
+      };
+      gitDiscardChanges: {
+        params: {
+          projectPath: string;
+          scope: "file" | "all";
+          file?: string;
+          status?: string;
+          staged: boolean;
+        };
+        response: { ok: true };
+      };
       searchFiles: {
         params: { projectPath: string; query: string };
         response: {

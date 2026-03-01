@@ -89,10 +89,10 @@ export function XtermTerminalPanel() {
 			});
 		};
 
-		let resizeRaf = 0;
+		let resizeTimer = 0;
 		const resizeObserver = new ResizeObserver(() => {
-			cancelAnimationFrame(resizeRaf);
-			resizeRaf = requestAnimationFrame(sendResize);
+			clearTimeout(resizeTimer);
+			resizeTimer = window.setTimeout(sendResize, 150);
 		});
 		resizeObserver.observe(container);
 
@@ -142,6 +142,7 @@ export function XtermTerminalPanel() {
 			if (terminalId) {
 				void terminalKill({ terminalId });
 			}
+			clearTimeout(resizeTimer);
 			unsubscribeData();
 			unsubscribeExit();
 			inputDisposable.dispose();
