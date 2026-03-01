@@ -1,15 +1,21 @@
 import { MultiFileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { Check, ChevronRight, Loader2, X } from "lucide-react";
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { useDiffPanel } from "@/lib/diff-panel-context";
 import { diffsWorkerFactory } from "@/lib/diffs-worker-factory";
 import {
 	type GitFileDiffContents,
 	type GitFileDiffSummary,
-	gitDiscardChanges,
-	gitStageChanges,
 	getGitFileDiffContents,
 	getGitFileDiffs,
+	gitDiscardChanges,
+	gitStageChanges,
 } from "@/lib/rpc";
 import { useTabsContext } from "@/lib/tabs-context";
 import { Button } from "./ui/button";
@@ -60,9 +66,9 @@ export function DiffPanel() {
 		{},
 	);
 	const [loading, setLoading] = useState(false);
-	const [runningFileActionKey, setRunningFileActionKey] = useState<string | null>(
-		null,
-	);
+	const [runningFileActionKey, setRunningFileActionKey] = useState<
+		string | null
+	>(null);
 	const [runningAllAction, setRunningAllAction] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const isWorkspace = activeTab.type === "workspace";
@@ -272,12 +278,27 @@ export function DiffPanel() {
 		[],
 	);
 
+	const emptyState = useMemo(
+		() =>
+			mode === "staged"
+				? {
+						title: "No staged changes",
+						description:
+							"Stage files in the Unstaged view to review them here.",
+					}
+				: {
+						title: "Working tree clean",
+						description: "Edit files to see unstaged diffs here.",
+					},
+		[mode],
+	);
+
 	return (
 		<WorkerPoolContextProvider
 			poolOptions={poolOptions}
 			highlighterOptions={highlighterOptions}
 		>
-			<div className="h-full flex flex-col bg-white border-l">
+			<div className="h-full flex flex-col bg-white border-l-px ">
 				<div className="h-9 shrink-0 px-3 border-b flex items-center justify-between">
 					<div className="text-xs font-medium">Uncommitted changes</div>
 					<Button size="icon-xs" variant="ghost" onClick={() => setOpen(false)}>
@@ -323,8 +344,18 @@ export function DiffPanel() {
 						<div className="text-xs text-red-600">{error}</div>
 					)}
 					{isWorkspace && !loading && !error && files.length === 0 && (
-						<div className="text-xs text-muted-foreground">
-							No changes in this view.
+						<div className="h-full flex items-center justify-center">
+							<div className="w-full max-w-[320px] rounded-lg border border-zinc-200 bg-zinc-50/70 px-4 py-6 text-center">
+								<div className="mx-auto mb-2 inline-flex size-7 items-center justify-center rounded-full border border-zinc-300 bg-white">
+									<Check className="size-3.5 text-zinc-500" />
+								</div>
+								<div className="text-xs font-medium text-zinc-700">
+									{emptyState.title}
+								</div>
+								<div className="mt-1 text-[11px] text-zinc-500">
+									{emptyState.description}
+								</div>
+							</div>
 						</div>
 					)}
 					{isWorkspace &&
