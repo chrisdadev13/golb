@@ -1,0 +1,92 @@
+src/mainview/components/xterm-terminal-panel.tsx
+  fa1b644e31349672 92,94-95,145
+src/mainview/lib/rpc.ts
+  e18ae459cba0a086 14-26,100-115
+  503b7a2c17b9a1d8 118-136
+src/shared/types.ts
+  e18ae459cba0a086 28-52
+  503b7a2c17b9a1d8 53-71
+src/mainview/lib/diff-panel-context.tsx
+  e18ae459cba0a086 1-59
+src/mainview/components/diff-panel.tsx
+  e18ae459cba0a086 1-2,4-8,13-47,49-50,52-53,60-62,67-70,73-76,79-86,88,90-93,101,105,108-159,237-258,260-332,334-347,352-356,387-390,392,399,412,424-425,428,431-432,435-438,441-467,469-476,479,485-488,491-498
+  503b7a2c17b9a1d8 3,9-10,63-66,71-72,77-78,87,89,94-100,102-104,106-107,160-236,357-386,477-478,480-484,489-490
+src/mainview/lib/terminal-panel-context.tsx
+  fa1b644e31349672 10
+src/bun/index.ts
+  e18ae459cba0a086 2,5,104-178,181-221,302,306,309,330,346,364,385,414,418,436-507,548-549,565,573,575,582,590,642-643
+  503b7a2c17b9a1d8 222-288,508-547,550
+src/mainview/lib/diffs-worker-factory.ts
+  e18ae459cba0a086 1-5
+src/mainview/types/diffs-worker.d.ts
+  e18ae459cba0a086 1-4
+vite.config.ts
+  e18ae459cba0a086 22-24
+src/mainview/App.tsx
+  e18ae459cba0a086 3,7,18-68,180-214,226-227,240-242,252-254
+src/mainview/lib/avatar.ts
+  fa1b644e31349672 2-7
+src/mainview/components/title-bar.tsx
+  e18ae459cba0a086 9-10,12,22,24-25,27-66,114,118,121
+src/mainview/pages/home.tsx
+  9323c227f80cc2d7 2-16,19-33,43-99,101-145,148-168,171,173-256,258-288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "1dd0c3c66bd3ee4934b575a36cd0687ebd954711",
+  "prompts": {
+    "503b7a2c17b9a1d8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b5cd3c2f-4383-4c3a-a7ae-cd14204aeb2b",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 309,
+      "total_deletions": 41,
+      "accepted_lines": 289,
+      "overriden_lines": 0
+    },
+    "9323c227f80cc2d7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "050e051d-5e1d-4c4f-af6d-9ed8b020c0df",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 348,
+      "total_deletions": 89,
+      "accepted_lines": 270,
+      "overriden_lines": 0
+    },
+    "e18ae459cba0a086": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4072b175-5321-4cb8-968f-88756d0e5001",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 1378,
+      "total_deletions": 572,
+      "accepted_lines": 788,
+      "overriden_lines": 19
+    },
+    "fa1b644e31349672": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "74ceca49-b936-4206-8b88-86e53844fcbd",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 10,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
