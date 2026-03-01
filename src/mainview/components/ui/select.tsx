@@ -94,7 +94,20 @@ function SelectTrigger({
 	if (tooltip) {
 		return (
 			<Tooltip>
-				<TooltipTrigger>{trigger}</TooltipTrigger>
+				<TooltipTrigger
+					render={
+						<SelectPrimitive.Trigger
+							className={cn(selectTriggerVariants({ size }), className)}
+							data-slot="select-trigger"
+							{...props}
+						/>
+					}
+				>
+					{children}
+					<SelectPrimitive.Icon data-slot="select-icon">
+						<ChevronsUpDownIcon className={selectTriggerIconClassName} />
+					</SelectPrimitive.Icon>
+				</TooltipTrigger>
 				<TooltipPopup>{tooltip}</TooltipPopup>
 			</Tooltip>
 		);

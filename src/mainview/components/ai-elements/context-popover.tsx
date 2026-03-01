@@ -20,7 +20,6 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverPopup } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { ContextItem } from "@/lib/context-types";
@@ -151,6 +150,29 @@ export function ContextPopover({
       clearTimeout(timer);
     };
   }, [open, projectPath, query, view]);
+
+  // Search files in sub-view when subViewSearch changes
+  const [subViewFileResults, setSubViewFileResults] = useState<FileEntry[]>([]);
+  useEffect(() => {
+    if (!open || !projectPath || view !== "files") return;
+    if (!subViewSearch) {
+      setSubViewFileResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchFiles(projectPath, subViewSearch);
+        if (!cancelled) setSubViewFileResults(results);
+      } catch {
+        if (!cancelled) setSubViewFileResults([]);
+      }
+    }, 100);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, projectPath, view, subViewSearch]);
 
   // Reset highlight when query/view changes
   useEffect(() => {
@@ -317,9 +339,6 @@ export function ContextPopover({
           key: "files",
           icon: <FolderIcon folderName="src" className="size-4 shrink-0" />,
           label: "Files and Folders",
-          suffix: (
-            <ChevronRight className="size-3 text-muted-foreground" />
-          ),
           onSelect: goToFiles,
           onExpand: goToFiles,
         },
@@ -327,9 +346,6 @@ export function ContextPopover({
           key: "git",
           icon: <GitBranch className="size-3 text-muted-foreground" />,
           label: "Git",
-          suffix: (
-            <ChevronRight className="size-3 text-muted-foreground" />
-          ),
           onSelect: goToGit,
           onExpand: goToGit,
         },
@@ -350,23 +366,17 @@ export function ContextPopover({
 
     // --- Files sub-view ---
     if (view === "files") {
-      const q = subViewSearch.toLowerCase();
-      const filtered = q
-        ? dirFiles.filter((f) => f.name.toLowerCase().includes(q))
-        : dirFiles;
-      return filtered.map((entry) => ({
+      // When searching, use recursive search results and show full paths
+      const entries = subViewSearch ? subViewFileResults : dirFiles;
+      return entries.map((entry) => ({
         key: `dir:${entry.path}`,
         icon: entry.isDirectory ? (
           <FolderIcon folderName={entry.name} className="size-4 shrink-0" />
         ) : (
           <FileIcon fileName={entry.name} autoAssign className="size-4 shrink-0" />
         ),
-        label: entry.name,
-        suffix: entry.isDirectory ? (
-          <ChevronRight className="size-3 text-muted-foreground" />
-        ) : undefined,
-        onSelect: () =>
-          entry.isDirectory ? navigateInto(entry) : selectFile(entry),
+        label: subViewSearch ? entry.path : entry.name,
+        onSelect: () => selectFile(entry),
         onExpand: entry.isDirectory ? () => navigateInto(entry) : undefined,
       }));
     }
@@ -432,6 +442,7 @@ export function ContextPopover({
     selectWebSearch,
     handleUploadImage,
     navigateInto,
+    subViewFileResults,
   ]);
 
   // Clamp highlight when options change
@@ -538,45 +549,42 @@ export function ContextPopover({
 
           {/* Sub-view search input */}
           {isSubView && (
-            <div className="px-1.5 pb-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
-                <Input
-                  ref={searchInputRef}
-                  size="sm"
-                  placeholder={
-                    view === "files"
-                      ? "Search files..."
-                      : "Search branches & changes..."
-                  }
-                  value={subViewSearch}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setSubViewSearch(e.target.value);
+            <div className="flex items-center gap-1.5 px-2 pb-1">
+              <Search className="size-3 text-muted-foreground shrink-0" />
+              <input
+                ref={searchInputRef}
+                placeholder={
+                  view === "files"
+                    ? "Search files..."
+                    : "Search branches & changes..."
+                }
+                value={subViewSearch}
+                onChange={(e) => {
+                  setSubViewSearch(e.target.value);
+                  setHighlightIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightIndex((prev) => {
+                      if (options.length === 0) return 0;
+                      if (e.key === "ArrowUp") {
+                        return prev <= 0 ? options.length - 1 : prev - 1;
+                      }
+                      return prev >= options.length - 1 ? 0 : prev + 1;
+                    });
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    const opt = options[highlightIndex];
+                    opt?.onSelect();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setView("main");
                     setHighlightIndex(0);
-                  }}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setHighlightIndex((prev) => {
-                        if (options.length === 0) return 0;
-                        if (e.key === "ArrowUp") {
-                          return prev <= 0 ? options.length - 1 : prev - 1;
-                        }
-                        return prev >= options.length - 1 ? 0 : prev + 1;
-                      });
-                    } else if (e.key === "Enter") {
-                      e.preventDefault();
-                      const opt = options[highlightIndex];
-                      opt?.onSelect();
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      setView("main");
-                      setHighlightIndex(0);
-                    }
-                  }}
-                  className="pl-7 h-6 text-xs"
-                />
-              </div>
+                  }
+                }}
+                className="flex-1 min-w-0 h-6 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
+              />
             </div>
           )}
 
@@ -645,7 +653,21 @@ export function ContextPopover({
                 >
                   {opt.icon}
                   <span className="flex-1 truncate">{opt.label}</span>
-                  {opt.suffix}
+                  {opt.onExpand ? (
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        opt.onExpand!();
+                      }}
+                      className="flex items-center justify-center size-5 rounded hover:bg-foreground/10 cursor-pointer shrink-0"
+                    >
+                      <ChevronRight className="size-3 text-muted-foreground" />
+                    </span>
+                  ) : (
+                    opt.suffix
+                  )}
                 </button>
               ))
             )}

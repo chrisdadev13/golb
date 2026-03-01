@@ -20,11 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { getAvatarColor } from "@/lib/avatar";
 import type { ContextItem } from "@/lib/context-types";
 import {
@@ -183,30 +178,26 @@ export default function IndexPage() {
               }
             }}
           >
-            <Tooltip>
-              <TooltipTrigger>
-                <SelectTrigger
-                  size="sm"
-                  aria-label="Select a project"
-                  className="w-38"
-                >
-                  <SelectValue placeholder="Select a project…">
-                    {(path) =>
-                      path ? (
-                        <span className="flex items-center gap-2">
-                          <FolderCode className="size-4 shrink-0" />
-                          <span className="truncate">
-                            {projects.find((p) => p.path === path)?.name ??
-                              path}
-                          </span>
-                        </span>
-                      ) : null
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Select existing project</TooltipContent>
-            </Tooltip>
+            <SelectTrigger
+              size="sm"
+              aria-label="Select a project"
+              className="w-38"
+              tooltip="Select existing project"
+            >
+              <SelectValue placeholder="Select a project…">
+                {(path) =>
+                  path ? (
+                    <span className="flex items-center gap-2">
+                      <FolderCode className="size-4 shrink-0" />
+                      <span className="truncate">
+                        {projects.find((p) => p.path === path)?.name ??
+                          path}
+                      </span>
+                    </span>
+                  ) : null
+                }
+              </SelectValue>
+            </SelectTrigger>
             <SelectPopup>
               {projects.map((project) => (
                 <SelectItem key={project.id} value={project.path}>

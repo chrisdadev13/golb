@@ -129,7 +129,11 @@ const rpc = BrowserView.defineRPC<AppRPC>({
 							if (hidden.has(entry.name) || entry.name.startsWith("."))
 								continue;
 							const entryRel = rel ? join(rel, entry.name) : entry.name;
-							if (entry.name.toLowerCase().includes(q)) {
+							// Match against both filename and full relative path
+							if (
+								entry.name.toLowerCase().includes(q) ||
+								entryRel.toLowerCase().includes(q)
+							) {
 								results.push({
 									name: entry.name,
 									path: entryRel,

@@ -126,22 +126,29 @@ export function MentionInput({
       // If @ is active, remove the @query text first (including the @ character)
       if (atActiveRef.current && atStartNodeRef.current) {
         const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          try {
-            const range = document.createRange();
-            // Start from the @ character itself (offset - 1)
-            range.setStart(
-              atStartNodeRef.current,
-              Math.max(0, atStartOffsetRef.current - 1),
-            );
+        const selInsideEditor =
+          sel &&
+          sel.rangeCount > 0 &&
+          el.contains(sel.getRangeAt(0).endContainer);
+        try {
+          const range = document.createRange();
+          const startOffset = Math.max(0, atStartOffsetRef.current - 1);
+          range.setStart(atStartNodeRef.current, startOffset);
+          if (selInsideEditor) {
+            // Selection is inside the editor — delete from @ to cursor
             range.setEnd(
               sel.getRangeAt(0).endContainer,
               sel.getRangeAt(0).endOffset,
             );
-            range.deleteContents();
-          } catch {
-            // If range manipulation fails, just proceed with insertion at caret
+          } else {
+            // Selection moved outside (e.g. popover search input) —
+            // delete just the @query text using the known text node
+            const textLen = atStartNodeRef.current.textContent?.length ?? 0;
+            range.setEnd(atStartNodeRef.current, textLen);
           }
+          range.deleteContents();
+        } catch {
+          // If range manipulation fails, just proceed with insertion at caret
         }
         atActiveRef.current = false;
         atStartNodeRef.current = null;
