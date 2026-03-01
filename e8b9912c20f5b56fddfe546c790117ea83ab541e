@@ -1,0 +1,53 @@
+src/bun/index.ts
+  2244fc2c6fcfa50e 2-3,6,12-91,262-341
+src/mainview/components/title-bar.tsx
+  2244fc2c6fcfa50e 10,18,28,37,63
+  fa8b7d8d15bbaab7 17,29,38
+src/mainview/components/xterm-terminal-panel.tsx
+  2244fc2c6fcfa50e 1-132
+src/mainview/lib/rpc.ts
+  2244fc2c6fcfa50e 4-16,22-31,38-45,47,55,65,73,83,86-127
+src/shared/types.ts
+  2244fc2c6fcfa50e 7,34-49,51,54,56-63
+electrobun.config.ts
+  2244fc2c6fcfa50e 14
+src/mainview/App.tsx
+  2244fc2c6fcfa50e 2-6,8,14,25,28,33-39,47-49
+src/mainview/lib/terminal-panel-context.tsx
+  2244fc2c6fcfa50e 1-41
+src/mainview/lib/tabs-context.tsx
+  fa8b7d8d15bbaab7 5,7,27-30,44-45,49-55,57,64-96,98-107,136,144,148,150-151,155-156,159,163-166,170,172-173,175,177-178,182-183,186-191,193,197-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "e8b9912c20f5b56fddfe546c790117ea83ab541e",
+  "prompts": {
+    "2244fc2c6fcfa50e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "94be916f-be99-4391-b872-b2ddd06332e2",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 623,
+      "total_deletions": 129,
+      "accepted_lines": 469,
+      "overriden_lines": 0
+    },
+    "fa8b7d8d15bbaab7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8efd0395-da2c-448a-8ce9-c25e93db0cc4",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 96,
+      "total_deletions": 53,
+      "accepted_lines": 93,
+      "overriden_lines": 0
+    }
+  }
+}
