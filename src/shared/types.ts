@@ -4,7 +4,7 @@ export type AppRPC = {
   bun: RPCSchema<{
     requests: {
       openFolder: {
-        params: {};
+        params: Record<string, never>;
         response: { paths: string[] } | null;
       };
       listFiles: {
@@ -31,11 +31,36 @@ export type AppRPC = {
           files: { name: string; path: string; isDirectory: boolean }[];
         };
       };
+      terminalCreate: {
+        params: { cols: number; rows: number; cwd?: string };
+        response: { terminalId: string };
+      };
+      terminalWrite: {
+        params: { terminalId: string; data: string };
+        response: { ok: true };
+      };
+      terminalResize: {
+        params: { terminalId: string; cols: number; rows: number };
+        response: { ok: true };
+      };
+      terminalKill: {
+        params: { terminalId: string };
+        response: { ok: true };
+      };
     };
-    messages: {};
+    messages: Record<string, never>;
   }>;
   webview: RPCSchema<{
-    requests: {};
-    messages: {};
+    requests: Record<string, never>;
+    messages: {
+      terminalData: {
+        terminalId: string;
+        data: string;
+      };
+      terminalExit: {
+        terminalId: string;
+        exitCode: number | null;
+      };
+    };
   }>;
 };

@@ -1,10 +1,93 @@
 import { readdir } from "node:fs/promises";
+import { existsSync, statSync } from "node:fs";
+import os from "node:os";
 import { join, resolve } from "node:path";
 import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
+import { spawn as ptySpawn, type IPty } from "bun-pty";
 import type { AppRPC } from "../shared/types";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+
+type TerminalSession = {
+	ptyProcess: IPty;
+};
+
+const terminalSessions = new Map<string, TerminalSession>();
+let nextTerminalId = 1;
+
+function createTerminalId() {
+	return `terminal-${nextTerminalId++}`;
+}
+
+function resolveShellPath() {
+	if (process.platform === "win32") {
+		return "powershell.exe";
+	}
+	return process.env.SHELL ?? "/bin/zsh";
+}
+
+function canUseDir(path: string) {
+	try {
+		return existsSync(path) && statSync(path).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+function resolveWorkingDirectory(preferredCwd?: string) {
+	const candidates = [
+		preferredCwd,
+		process.cwd(),
+		process.env.HOME,
+		os.homedir(),
+		"/tmp",
+		"/",
+	];
+	for (const candidate of candidates) {
+		if (candidate && canUseDir(candidate)) {
+			return candidate;
+		}
+	}
+	return "/";
+}
+
+function getSanitizedEnv() {
+	const env: Record<string, string> = {};
+	for (const [key, value] of Object.entries(process.env)) {
+		if (typeof value === "string") {
+			env[key] = value;
+		}
+	}
+	if (!env.PATH || env.PATH.trim().length === 0) {
+		env.PATH = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+	}
+	if (!env.HOME || env.HOME.trim().length === 0) {
+		env.HOME = os.homedir();
+	}
+	if (!env.TERM || env.TERM.trim().length === 0) {
+		env.TERM = "xterm-256color";
+	}
+	return env;
+}
+
+function broadcastTerminalData(payload: {
+	terminalId: string;
+	data: string;
+}) {
+	for (const view of BrowserView.getAll()) {
+		view.rpc.send.terminalData(payload);
+	}
+}
+
+function broadcastTerminalExit(payload: {
+	terminalId: string;
+	exitCode: number | null;
+}) {
+	for (const view of BrowserView.getAll()) {
+		view.rpc.send.terminalExit(payload);
+	}
+}
 
 // Check if Vite dev server is running for HMR
 async function getMainViewUrl(): Promise<string> {
@@ -175,6 +258,87 @@ const rpc = BrowserView.defineRPC<AppRPC>({
 						return { file, status };
 					});
 				return { changes };
+			},
+			terminalCreate: async ({
+				cols,
+				rows,
+				cwd,
+			}: {
+				cols: number;
+				rows: number;
+				cwd?: string;
+			}) => {
+				const terminalId = createTerminalId();
+				const resolvedCwd = resolveWorkingDirectory(cwd);
+				const shell = resolveShellPath();
+				const env = getSanitizedEnv();
+
+				const ptyProcess = ptySpawn(shell, ["-l"], {
+					name: "xterm-256color",
+					cols: Math.max(2, cols),
+					rows: Math.max(1, rows),
+					cwd: resolvedCwd,
+					env,
+				});
+
+				terminalSessions.set(terminalId, { ptyProcess });
+
+				ptyProcess.onData((data: string) => {
+					broadcastTerminalData({
+						terminalId,
+						data,
+					});
+				});
+
+				ptyProcess.onExit((event: { exitCode: number }) => {
+					terminalSessions.delete(terminalId);
+					broadcastTerminalExit({
+						terminalId,
+						exitCode: event.exitCode,
+					});
+				});
+
+				return { terminalId };
+			},
+			terminalWrite: async ({
+				terminalId,
+				data,
+			}: {
+				terminalId: string;
+				data: string;
+			}) => {
+				const terminalSession = terminalSessions.get(terminalId);
+				if (terminalSession) {
+					terminalSession.ptyProcess.write(data);
+				}
+				return { ok: true as const };
+			},
+			terminalResize: async ({
+				terminalId,
+				cols,
+				rows,
+			}: {
+				terminalId: string;
+				cols: number;
+				rows: number;
+			}) => {
+				const terminalSession = terminalSessions.get(terminalId);
+				if (terminalSession && cols > 0 && rows > 0) {
+					terminalSession.ptyProcess.resize(cols, rows);
+				}
+				return { ok: true as const };
+			},
+			terminalKill: async ({
+				terminalId,
+			}: {
+				terminalId: string;
+			}) => {
+				const terminalSession = terminalSessions.get(terminalId);
+				if (terminalSession) {
+					terminalSession.ptyProcess.kill();
+					terminalSessions.delete(terminalId);
+				}
+				return { ok: true as const };
 			},
 		},
 		messages: {},

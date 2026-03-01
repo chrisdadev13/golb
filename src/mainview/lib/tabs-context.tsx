@@ -2,7 +2,9 @@ import {
 	createContext,
 	useCallback,
 	useContext,
+	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type ReactNode,
 } from "react";
@@ -22,6 +24,10 @@ type TabsContextValue = {
 	closeTab: (tabId: string) => void;
 	switchTab: (tabId: string) => void;
 	openProject: (projectPath: string) => void;
+	canGoBack: boolean;
+	canGoForward: boolean;
+	goBack: () => void;
+	goForward: () => void;
 };
 
 const TabsContext = createContext<TabsContextValue | null>(null);
@@ -35,14 +41,69 @@ function createNewTab(): Tab {
 	return { id: generateId(), type: "new-tab" };
 }
 
+type NavState = { tabs: Tab[]; activeTabId: string; navIndex: number };
+
 export function TabsProvider({ children }: { children: ReactNode }) {
 	const [tabs, setTabs] = useState<Tab[]>(() => [createNewTab()]);
 	const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
+	const [canGoBack, setCanGoBack] = useState(false);
+	const [canGoForward, setCanGoForward] = useState(false);
+
+	const tabsRef = useRef(tabs);
+	tabsRef.current = tabs;
+	const activeTabIdRef = useRef(activeTabId);
+	activeTabIdRef.current = activeTabId;
+
+	const navRef = useRef({ index: 0, length: 1, restoringFromHistory: false });
 
 	const activeTab = useMemo(
 		() => tabs.find((t) => t.id === activeTabId) ?? tabs[0],
 		[tabs, activeTabId],
 	);
+
+	const pushNavState = useCallback((newTabs: Tab[], newActiveTabId: string) => {
+		if (navRef.current.restoringFromHistory) return;
+		const nav = navRef.current;
+		nav.index++;
+		nav.length = nav.index + 1;
+		const state: NavState = { tabs: newTabs, activeTabId: newActiveTabId, navIndex: nav.index };
+		history.pushState(state, "");
+		setCanGoBack(true);
+		setCanGoForward(false);
+	}, []);
+
+	useEffect(() => {
+		const state: NavState = {
+			tabs: tabsRef.current,
+			activeTabId: activeTabIdRef.current,
+			navIndex: 0,
+		};
+		history.replaceState(state, "");
+	}, []);
+
+	useEffect(() => {
+		const handlePopstate = (event: PopStateEvent) => {
+			const state = event.state as NavState | null;
+			if (!state?.tabs) return;
+
+			const nav = navRef.current;
+			nav.restoringFromHistory = true;
+			nav.index = state.navIndex;
+
+			setTabs(state.tabs);
+			setActiveTabId(state.activeTabId);
+			setCanGoBack(state.navIndex > 0);
+			setCanGoForward(state.navIndex < nav.length - 1);
+
+			nav.restoringFromHistory = false;
+		};
+
+		window.addEventListener("popstate", handlePopstate);
+		return () => window.removeEventListener("popstate", handlePopstate);
+	}, []);
+
+	const goBack = useCallback(() => { history.back(); }, []);
+	const goForward = useCallback(() => { history.forward(); }, []);
 
 	const addTab = useCallback(
 		(options?: { type?: Tab["type"]; projectPath?: string; projectName?: string }) => {
@@ -72,7 +133,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
 					return [fresh];
 				}
 
-				if (activeTabId === tabId) {
+				if (activeTabIdRef.current === tabId) {
 					const newIdx = Math.min(idx, next.length - 1);
 					setActiveTabId(next[newIdx].id);
 				}
@@ -80,48 +141,61 @@ export function TabsProvider({ children }: { children: ReactNode }) {
 				return next;
 			});
 		},
-		[activeTabId],
+		[],
 	);
 
 	const switchTab = useCallback((tabId: string) => {
+		if (tabId === activeTabIdRef.current) return;
 		setActiveTabId(tabId);
-	}, []);
+		pushNavState(tabsRef.current, tabId);
+	}, [pushNavState]);
 
 	const openProject = useCallback(
 		(projectPath: string) => {
+			const currentTabs = tabsRef.current;
+			const currentActiveId = activeTabIdRef.current;
 			const projectName = projectPath.split("/").pop() || "project";
 
-			// If project is already open in a tab, switch to it
-			const existing = tabs.find(
+			const existing = currentTabs.find(
 				(t) => t.type === "workspace" && t.projectPath === projectPath,
 			);
 			if (existing) {
-				setActiveTabId(existing.id);
+				if (existing.id !== currentActiveId) {
+					setActiveTabId(existing.id);
+					pushNavState(currentTabs, existing.id);
+				}
 				return;
 			}
 
-			// If the active tab is a new-tab, convert it in-place
-			const active = tabs.find((t) => t.id === activeTabId);
+			const active = currentTabs.find((t) => t.id === currentActiveId);
 			if (active?.type === "new-tab") {
-				setTabs((prev) =>
-					prev.map((t) =>
-						t.id === activeTabId
-							? { ...t, type: "workspace" as const, projectPath, projectName }
-							: t,
-					),
+				const newTabs = currentTabs.map((t) =>
+					t.id === currentActiveId
+						? { ...t, type: "workspace" as const, projectPath, projectName }
+						: t,
 				);
+				setTabs(newTabs);
+				pushNavState(newTabs, currentActiveId);
 				return;
 			}
 
-			// Otherwise create a new workspace tab
-			addTab({ type: "workspace", projectPath, projectName });
+			const tab: Tab = {
+				id: generateId(),
+				type: "workspace",
+				projectPath,
+				projectName,
+			};
+			const newTabs = [...currentTabs, tab];
+			setTabs(newTabs);
+			setActiveTabId(tab.id);
+			pushNavState(newTabs, tab.id);
 		},
-		[tabs, activeTabId, addTab],
+		[pushNavState],
 	);
 
 	const value = useMemo(
-		() => ({ tabs, activeTabId, activeTab, addTab, closeTab, switchTab, openProject }),
-		[tabs, activeTabId, activeTab, addTab, closeTab, switchTab, openProject],
+		() => ({ tabs, activeTabId, activeTab, addTab, closeTab, switchTab, openProject, canGoBack, canGoForward, goBack, goForward }),
+		[tabs, activeTabId, activeTab, addTab, closeTab, switchTab, openProject, canGoBack, canGoForward, goBack, goForward],
 	);
 
 	return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;

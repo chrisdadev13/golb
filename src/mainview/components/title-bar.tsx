@@ -7,13 +7,15 @@ import {
   SquareTerminal,
 } from "lucide-react";
 import { useTabsContext } from "@/lib/tabs-context";
+import { useTerminalPanel } from "@/lib/terminal-panel-context";
 import { Button } from "./ui/button";
 import { ButtonGroup } from "./ui/button-group";
 import { Separator } from "./ui/separator";
 import { WorkspaceTabs } from "./workspace-tabs";
 
 export function TitleBar() {
-  const { activeTab } = useTabsContext();
+  const { activeTab, canGoBack, canGoForward, goBack, goForward } = useTabsContext();
+  const { toggle: toggleTerminal } = useTerminalPanel();
   const isWorkspace = activeTab.type === "workspace";
 
   return (
@@ -23,7 +25,8 @@ export function TitleBar() {
           size="icon-xs"
           variant="ghost"
           tooltip="Go back"
-          onClick={() => history.back()}
+          disabled={!canGoBack}
+          onClick={goBack}
         >
           <ChevronLeft />
         </Button>
@@ -31,7 +34,8 @@ export function TitleBar() {
           size="icon-xs"
           variant="ghost"
           tooltip="Go forward"
-          onClick={() => history.forward()}
+          disabled={!canGoForward}
+          onClick={goForward}
         >
           <ChevronRight />
         </Button>
@@ -52,7 +56,12 @@ export function TitleBar() {
             </Button>
           </ButtonGroup>
           <Separator orientation="vertical" className="h-4" />
-          <Button size="icon-xs" variant="ghost" tooltip="Terminal">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            tooltip="Terminal"
+            onClick={toggleTerminal}
+          >
             <SquareTerminal />
           </Button>
           <Button size="xs" variant="ghost">
