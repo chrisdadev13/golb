@@ -1,4 +1,5 @@
-import { BrowserWindow, Updater } from "electrobun/bun";
+import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
+import type { AppRPC } from "../shared/types";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -20,18 +21,43 @@ async function getMainViewUrl(): Promise<string> {
 	return "views://mainview/index.html";
 }
 
-// Create the main application window
-const url = await getMainViewUrl();
+const rpc = BrowserView.defineRPC<AppRPC>({
+	handlers: {
+		requests: {
+			openFolder: async () => {
+				const paths = await Utils.openFileDialog({
+					startingFolder: "~/",
+					allowedFileTypes: "*",
+					canChooseFiles: false,
+					canChooseDirectory: true,
+					allowsMultipleSelection: false,
+				});
 
-const mainWindow = new BrowserWindow({
-	title: "React + Tailwind + Vite",
-	url,
-	frame: {
-		width: 900,
-		height: 700,
-		x: 200,
-		y: 200,
+				if (!paths.length || (paths.length === 1 && paths[0] === "")) {
+					return null;
+				}
+
+				return { paths };
+			},
+		},
+		messages: {},
 	},
 });
 
-console.log("React Tailwind Vite app started!");
+// Create the main application window
+const url = await getMainViewUrl();
+
+new BrowserWindow({
+	title: "Golb",
+	url,
+	rpc,
+	frame: {
+		width: 1200,
+		height: 800,
+		x: 200,
+		y: 200,
+	},
+	titleBarStyle: "hiddenInset",
+});
+
+console.log("Golb started!");
