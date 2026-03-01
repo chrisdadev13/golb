@@ -33,6 +33,8 @@ function PopoverPopup({
   alignOffset = 0,
   tooltipStyle = false,
   anchor,
+  initialFocus,
+  finalFocus,
   ...props
 }: PopoverPrimitive.Popup.Props & {
   side?: PopoverPrimitive.Positioner.Props["side"];
@@ -41,6 +43,8 @@ function PopoverPopup({
   alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
   tooltipStyle?: boolean;
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+  initialFocus?: PopoverPrimitive.Popup.Props["initialFocus"];
+  finalFocus?: PopoverPrimitive.Popup.Props["finalFocus"];
 }) {
   return (
     <PopoverPrimitive.Portal>
@@ -61,6 +65,8 @@ function PopoverPopup({
             className,
           )}
           data-slot="popover-popup"
+          initialFocus={initialFocus}
+          finalFocus={finalFocus}
           {...props}
         >
           <PopoverPrimitive.Viewport

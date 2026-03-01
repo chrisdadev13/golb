@@ -9,7 +9,7 @@ import {
 	PencilLine,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,6 +26,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getAvatarColor } from "@/lib/avatar";
+import type { ContextItem } from "@/lib/context-types";
 import {
 	addRecentProject,
 	formatTimeAgo,
@@ -35,11 +36,18 @@ import {
 import { openFolderDialog } from "@/lib/rpc";
 import { useTabsContext } from "@/lib/tabs-context";
 import {
+	ContextPopover,
+	type ContextPopoverHandle,
+} from "../components/ai-elements/context-popover";
+import {
+	MentionInput,
+	type MentionInputHandle,
+} from "../components/ai-elements/mention-input";
+import {
 	PromptInput,
 	PromptInputButton,
 	PromptInputFooter,
 	PromptInputSubmit,
-	PromptInputTextarea,
 	PromptInputTools,
 } from "../components/ai-elements/prompt-input";
 
@@ -54,6 +62,16 @@ export default function IndexPage() {
 	const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(
 		() => getRecentProjects()[0]?.path ?? null,
 	);
+
+	// Context selector state
+	const [popoverOpen, setPopoverOpen] = useState(false);
+	const [popoverAnchor, setPopoverAnchor] = useState<Element | DOMRect | null>(
+		null,
+	);
+	const [atQuery, setAtQuery] = useState("");
+	const mentionInputRef = useRef<MentionInputHandle>(null);
+	const popoverHandleRef = useRef<ContextPopoverHandle>(null);
+	const contextButtonRef = useRef<Element | null>(null);
 
 	const filtered = useMemo(() => {
 		if (!search) return projects;
@@ -76,10 +94,78 @@ export default function IndexPage() {
 		openProject(paths[0]);
 	};
 
-	const handleSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
-		// TODO: handle prompt submission
-	};
+	const handleSubmit = useCallback(
+		({ text: formText }: { text: string }) => {
+			// Get text from MentionInput if form text is empty (submit button clicked)
+			const text =
+				formText.trim() ||
+				mentionInputRef.current?.getText()?.trim() ||
+				"";
+			if (!text) return;
+			// TODO: handle prompt submission with text and context items
+			const contextItems = mentionInputRef.current?.getContextItems() ?? [];
+			console.log("Submit:", { text, contextItems });
+			mentionInputRef.current?.clear();
+		},
+		[],
+	);
+
+	const handleMentionSubmit = useCallback(
+		(text: string, _contextItems: ContextItem[]) => {
+			if (!text.trim()) return;
+			handleSubmit({ text });
+		},
+		[handleSubmit],
+	);
+
+	const handleAtTrigger = useCallback((rect: DOMRect, query: string) => {
+		setPopoverAnchor(rect);
+		setAtQuery(query);
+		setPopoverOpen(true);
+	}, []);
+
+	const handleAtDismiss = useCallback(() => {
+		setPopoverOpen(false);
+		setAtQuery("");
+	}, []);
+
+	const handleContextButtonClick = useCallback(
+		(e: React.MouseEvent) => {
+			contextButtonRef.current = e.currentTarget as Element;
+			setPopoverAnchor(e.currentTarget as Element);
+			setAtQuery("");
+			setPopoverOpen(true);
+		},
+		[],
+	);
+
+	const handleAtKeyDown = useCallback((key: string): boolean => {
+		const handle = popoverHandleRef.current;
+		if (!handle) return false;
+		if (key === "ArrowUp" || key === "ArrowDown") {
+			handle.moveHighlight(key === "ArrowUp" ? "up" : "down");
+			return true;
+		}
+		if (key === "Enter" || key === "Tab") {
+			return handle.selectHighlighted();
+		}
+		if (key === "ArrowRight") {
+			return handle.expandHighlighted();
+		}
+		return false;
+	}, []);
+
+	const handleSelectContextItem = useCallback((item: ContextItem) => {
+		mentionInputRef.current?.insertBadge(item);
+	}, []);
+
+	const handleUploadImage = useCallback(() => {
+		// Find the hidden file input from PromptInput and trigger it
+		const fileInput = document.querySelector<HTMLInputElement>(
+			'input[type="file"][aria-label="Upload files"]',
+		);
+		fileInput?.click();
+	}, []);
 
 	const promptModeItems: Array<{
 		label: string;
@@ -145,9 +231,17 @@ export default function IndexPage() {
 			<div className="mt-5">
 				<PromptInput
 					onSubmit={handleSubmit}
-					className="**:data-[slot=input-group]:rounded-[13px] **:data-[slot=input-group]:border **:data-[slot=input-group]:border-gray-300 **:data-[slot=input-group]:dark:border-neutral-700 **:data-[slot=input-group]:shadow-none **:data-[slot=input-group]:py-2.25 **:data-[slot=input-group]:gap-3.25 **:data-[slot=input-group]:ring-0! **:data-[slot=input-group]:has-[textarea:focus-visible]:border-gray-300 **:data-[slot=input-group]:dark:has-[textarea:focus-visible]:border-neutral-700 [&_textarea]:min-h-5.25! [&_textarea]:py-0! [&_textarea]:text-sm [&_textarea]:!max-sm:min-h-[21px] [&_textarea]:focus-visible:ring-0!"
+					className="**:data-[slot=input-group]:rounded-[13px] **:data-[slot=input-group]:border **:data-[slot=input-group]:border-gray-300 **:data-[slot=input-group]:dark:border-neutral-700 **:data-[slot=input-group]:shadow-none **:data-[slot=input-group]:py-2.25 **:data-[slot=input-group]:gap-3.25 **:data-[slot=input-group]:ring-0! **:data-[slot=input-group]:has-[[data-slot=mention-input]:focus]:border-gray-300 **:data-[slot=input-group]:dark:has-[[data-slot=mention-input]:focus]:border-neutral-700 **:data-[slot=input-group]:has-[textarea:focus-visible]:border-gray-300 **:data-[slot=input-group]:dark:has-[textarea:focus-visible]:border-neutral-700 [&_textarea]:min-h-5.25! [&_textarea]:py-0! [&_textarea]:text-sm [&_textarea]:!max-sm:min-h-[21px] [&_textarea]:focus-visible:ring-0!"
 				>
-					<PromptInputTextarea placeholder="Use '@' to add context" />
+					<MentionInput
+						handleRef={mentionInputRef}
+						placeholder="Use '@' to add context"
+						onAtTrigger={handleAtTrigger}
+						onAtDismiss={handleAtDismiss}
+						onAtKeyDown={handleAtKeyDown}
+						onSubmit={handleMentionSubmit}
+						className="min-h-5.25 px-[calc(var(--spacing,0.25rem)*3-1px)]"
+					/>
 					<PromptInputFooter className="gap-1.25 pt-0 pb-0 px-2.25">
 						<PromptInputTools className="gap-1.25">
 							<Select
@@ -198,6 +292,7 @@ export default function IndexPage() {
 								size="xs"
 								variant="outline"
 								className="text-xs! h-6!"
+								onClick={handleContextButtonClick}
 							>
 								@ Context
 							</PromptInputButton>
@@ -209,6 +304,16 @@ export default function IndexPage() {
 						/>
 					</PromptInputFooter>
 				</PromptInput>
+				<ContextPopover
+					open={popoverOpen}
+					onOpenChange={setPopoverOpen}
+					anchor={popoverAnchor}
+					projectPath={selectedProjectPath}
+					query={atQuery}
+					onSelectItem={handleSelectContextItem}
+					onUploadImage={handleUploadImage}
+					popoverRef={popoverHandleRef}
+				/>
 			</div>
 			<Separator className="my-8" />
 			<div>
