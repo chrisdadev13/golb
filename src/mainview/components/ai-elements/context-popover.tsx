@@ -3,14 +3,13 @@
 import {
   ArrowLeft,
   ChevronRight,
-  File,
-  Folder,
   GitBranch,
   GitCommit,
   Globe,
   ImageIcon,
   Search,
 } from "lucide-react";
+import { FileIcon, FolderIcon } from "@react-symbols/icons/utils";
 import { nanoid } from "nanoid";
 import {
   useCallback,
@@ -284,9 +283,9 @@ export function ContextPopover({
           opts.push({
             key: `file:${f.path}`,
             icon: f.isDirectory ? (
-              <Folder className="size-3 text-muted-foreground" />
+              <FolderIcon folderName={f.name} className="size-4 shrink-0" />
             ) : (
-              <File className="size-3 text-muted-foreground" />
+              <FileIcon fileName={f.name} autoAssign className="size-4 shrink-0" />
             ),
             label: f.path,
             onSelect: () => selectFile(f),
@@ -316,7 +315,7 @@ export function ContextPopover({
       return [
         {
           key: "files",
-          icon: <Folder className="size-3 text-muted-foreground" />,
+          icon: <FolderIcon folderName="src" className="size-4 shrink-0" />,
           label: "Files and Folders",
           suffix: (
             <ChevronRight className="size-3 text-muted-foreground" />
@@ -358,9 +357,9 @@ export function ContextPopover({
       return filtered.map((entry) => ({
         key: `dir:${entry.path}`,
         icon: entry.isDirectory ? (
-          <Folder className="size-3 text-muted-foreground" />
+          <FolderIcon folderName={entry.name} className="size-4 shrink-0" />
         ) : (
-          <File className="size-3 text-muted-foreground" />
+          <FileIcon fileName={entry.name} autoAssign className="size-4 shrink-0" />
         ),
         label: entry.name,
         suffix: entry.isDirectory ? (
