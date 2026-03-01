@@ -1,0 +1,27 @@
+src/mainview/components/xterm-terminal-panel.tsx
+  fa1b644e31349672 48-68,92,94-95
+src/mainview/App.tsx
+  fa1b644e31349672 1,4,14-70,72-73,75-112,114-126,133,147
+src/mainview/lib/terminal-panel-context.tsx
+  fa1b644e31349672 9-10,12,17-22,31-32,34-38,44-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "9d95b241e502127d2e817f2c5afabf852a8d9d16",
+  "prompts": {
+    "fa1b644e31349672": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "74ceca49-b936-4206-8b88-86e53844fcbd",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 187,
+      "total_deletions": 41,
+      "accepted_lines": 160,
+      "overriden_lines": 3
+    }
+  }
+}
