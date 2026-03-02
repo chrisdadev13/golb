@@ -1,5 +1,5 @@
 import { MultiFileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
-import { Check, ChevronRight, Loader2, X } from "lucide-react";
+import { BookIcon, Check, ChevronRight, Loader2, RouteIcon, X } from "lucide-react";
 import {
 	type CSSProperties,
 	useCallback,
@@ -21,6 +21,14 @@ import { useTabsContext } from "@/lib/tabs-context";
 import { Button } from "./ui/button";
 import { ButtonGroup } from "./ui/button-group";
 import { Checkbox } from "./ui/checkbox";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "./ui/empty";
 
 type DiffPanelMode = "unstaged" | "staged";
 
@@ -344,19 +352,41 @@ export function DiffPanel() {
 						<div className="text-xs text-red-600">{error}</div>
 					)}
 					{isWorkspace && !loading && !error && files.length === 0 && (
-						<div className="h-full flex items-center justify-center">
-							<div className="w-full max-w-[320px] rounded-lg border border-zinc-200 bg-zinc-50/70 px-4 py-6 text-center">
-								<div className="mx-auto mb-2 inline-flex size-7 items-center justify-center rounded-full border border-zinc-300 bg-white">
-									<Check className="size-3.5 text-zinc-500" />
+						<Empty className="h-full py-8">
+							<EmptyHeader>
+								<EmptyMedia variant="icon">
+									<RouteIcon />
+								</EmptyMedia>
+								<EmptyTitle className="text-base">{emptyState.title}</EmptyTitle>
+								<EmptyDescription>{emptyState.description}</EmptyDescription>
+							</EmptyHeader>
+							<EmptyContent>
+								<div className="flex gap-2">
+									<Button
+										size="sm"
+										onClick={() =>
+											mode === "staged"
+												? setMode("unstaged")
+												: void refreshDiffs()
+										}
+									>
+										{mode === "staged" ? "Review unstaged" : "Refresh diffs"}
+									</Button>
+									<Button
+										size="sm"
+										variant="outline"
+										onClick={() =>
+											mode === "staged"
+												? void refreshDiffs()
+												: setMode("staged")
+										}
+									>
+										<BookIcon />
+										{mode === "staged" ? "Refresh" : "View staged"}
+									</Button>
 								</div>
-								<div className="text-xs font-medium text-zinc-700">
-									{emptyState.title}
-								</div>
-								<div className="mt-1 text-[11px] text-zinc-500">
-									{emptyState.description}
-								</div>
-							</div>
-						</div>
+							</EmptyContent>
+						</Empty>
 					)}
 					{isWorkspace &&
 						!loading &&

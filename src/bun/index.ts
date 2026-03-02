@@ -4,7 +4,7 @@ import os from "node:os";
 import { join, resolve } from "node:path";
 import { type IPty, spawn as ptySpawn } from "bun-pty";
 import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
-import { and, eq, desc } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import type { AppRPC } from "../shared/types";
 import { getDb, migrateDb } from "./db";
 import {
@@ -690,7 +690,10 @@ const rpc = BrowserView.defineRPC<AppRPC>({
           .where(
             and(
               eq(historyEventsTable.projectId, projectId),
-              eq(historyEventsTable.type, "plan_created"),
+              or(
+                eq(historyEventsTable.type, "plan_created"),
+                eq(historyEventsTable.type, "plan_revision"),
+              ),
             ),
           );
 
@@ -720,7 +723,10 @@ const rpc = BrowserView.defineRPC<AppRPC>({
           .where(
             and(
               eq(historyEventsTable.sessionId, sessionId),
-              eq(historyEventsTable.type, "plan_created"),
+              or(
+                eq(historyEventsTable.type, "plan_created"),
+                eq(historyEventsTable.type, "plan_revision"),
+              ),
             ),
           )
           .orderBy(desc(historyEventsTable.createdAt))

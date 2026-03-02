@@ -11,7 +11,7 @@ const mistral = createMistral({
 	apiKey: "m4bRvDtPFUztCe1oGKtYZ20kBw204Iud",
 });
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getDb } from "../db";
 import { generatePlan } from "./plan-agent";
@@ -243,7 +243,43 @@ async function handlePlanRequest(req: Request): Promise<Response> {
 	}: { prompt: string; projectPath: string; sessionId: string } = body;
 	const projectId = await ensureProject(projectPath);
 	await ensureSession(sessionId, projectId);
-	const plan = await generatePlan(prompt, projectPath);
+
+	const latestPlanEvent = await getDb()
+		.select({ metadata: historyEventsTable.metadata })
+		.from(historyEventsTable)
+		.where(
+			and(
+				eq(historyEventsTable.sessionId, sessionId),
+				or(
+					eq(historyEventsTable.type, "plan_created"),
+					eq(historyEventsTable.type, "plan_revision"),
+				),
+			),
+		)
+		.orderBy(desc(historyEventsTable.createdAt))
+		.limit(1);
+
+	const latestMetadata = latestPlanEvent[0]?.metadata;
+	const previousPlan =
+		latestMetadata &&
+		typeof latestMetadata === "object" &&
+		!Array.isArray(latestMetadata) &&
+		typeof latestMetadata.content === "string"
+			? latestMetadata.content
+			: undefined;
+	const requestMode = previousPlan ? "refine" : "create";
+	const responseMode = requestMode === "create" ? "created" : "revised";
+
+	const plan = await generatePlan({
+		prompt,
+		projectPath,
+		currentPlan: previousPlan,
+		requestMode,
+	});
+	const assistantText =
+		responseMode === "created"
+			? "Plan generated. Open the Plan tab to review the full plan."
+			: "Plan updated. Open the Plan tab to review the latest version.";
 
 	const planMessages: UIMessage[] = [
 		{
@@ -257,7 +293,7 @@ async function handlePlanRequest(req: Request): Promise<Response> {
 			parts: [
 				{
 					type: "text",
-					text: "Plan generated. Open the Plan tab to review the full plan.",
+					text: assistantText,
 				},
 			],
 		},
@@ -285,13 +321,16 @@ async function handlePlanRequest(req: Request): Promise<Response> {
 		id: nanoid(),
 		projectId,
 		sessionId,
-		type: "plan_created",
-		title: "Plan generated",
-		metadata: { content: plan, prompt },
+		type: responseMode === "created" ? "plan_created" : "plan_revision",
+		title: responseMode === "created" ? "Plan generated" : "Plan revised",
+		metadata:
+			responseMode === "created"
+				? { content: plan, prompt }
+				: { content: plan, previousContent: previousPlan, prompt },
 		createdAt: new Date(),
 	});
 
-	return new Response(JSON.stringify({ plan }), {
+	return new Response(JSON.stringify({ plan, mode: responseMode }), {
 		status: 200,
 		headers: { ...corsHeaders(), "Content-Type": "application/json" },
 	});
@@ -375,10 +414,42 @@ export function startChatServer(): void {
 					return await handlePlanRequest(req);
 				} catch (err) {
 					console.error("Plan server error:", err);
+					const errorLike = err as {
+						statusCode?: unknown;
+						message?: unknown;
+						errors?: unknown;
+					};
+					let status = 500;
+					let message =
+						err instanceof Error ? err.message : "Unknown plan server error";
+
+					if (typeof errorLike.statusCode === "number") {
+						status = errorLike.statusCode;
+					}
+
+					if (Array.isArray(errorLike.errors)) {
+						for (const nestedError of errorLike.errors) {
+							if (
+								nestedError &&
+								typeof nestedError === "object" &&
+								typeof (nestedError as { statusCode?: unknown }).statusCode ===
+									"number"
+							) {
+								status = (nestedError as { statusCode: number }).statusCode;
+								break;
+							}
+						}
+					}
+
+					if (message.toLowerCase().includes("rate limit")) {
+						status = 429;
+						message = "AI provider rate limit exceeded. Please retry shortly.";
+					}
+
 					return new Response(
-						JSON.stringify({ error: "Internal server error" }),
+						JSON.stringify({ error: message }),
 						{
-							status: 500,
+							status,
 							headers: { ...corsHeaders(), "Content-Type": "application/json" },
 						},
 					);

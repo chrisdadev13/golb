@@ -71,7 +71,7 @@ const promptModeItems: Array<{
 	{ label: "Debug", value: "debug", icon: Bug },
 ];
 
-type ChatHeaderTab = "chat" | "plan" | "history";
+type ChatHeaderTab = "chat" | "plan" | "experiments";
 
 type PlanPreview = {
 	title: string;
@@ -165,15 +165,15 @@ function PlanCodeBlock({
 
 	if (!highlightedHtml) {
 		return (
-			<pre className="mt-2 overflow-x-auto rounded-lg border border-border/70 bg-muted/30 p-3">
-				<code className="text-[11px] leading-4.5">{code}</code>
+			<pre className="mt-1.5 overflow-x-auto rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2 shadow-sm">
+				<code className="text-[11px] leading-4">{code}</code>
 			</pre>
 		);
 	}
 
 	return (
 		<div
-			className="mt-2 overflow-hidden rounded-lg border border-border/70 bg-muted/30 text-[11px] [&_pre]:overflow-x-auto [&_pre]:px-3 [&_pre]:py-3 [&_code]:text-[11px] [&_code]:leading-4.5"
+			className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-muted/20 text-[11px] shadow-sm [&_pre]:overflow-x-auto [&_pre]:px-2.5 [&_pre]:py-2 [&_code]:text-[11px] [&_code]:leading-4"
 			/* biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki-generated HTML is used only for syntax highlighting. */
 			dangerouslySetInnerHTML={{ __html: highlightedHtml }}
 		/>
@@ -207,7 +207,7 @@ function PlanMarkdown({ content }: { content: string }) {
 						const isBlock = language !== "plaintext" || code.includes("\n");
 						if (!isBlock) {
 							return (
-								<code className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">
+								<code className="rounded-md bg-muted/45 px-1 py-0.5 font-mono text-[11px] leading-4">
 									{code}
 								</code>
 							);
@@ -238,7 +238,7 @@ function ChatHeader({
 	const tabs: { label: string; value: ChatHeaderTab }[] = [
 		{ label: "Chat", value: "chat" },
 		{ label: "Plan", value: "plan" },
-		{ label: "History", value: "history" },
+		{ label: "Experiments", value: "experiments" },
 	];
 
 	return (
@@ -296,7 +296,10 @@ function ChatSession({
 	onBranchChange: (branch: string | null) => void;
 	changesCount: number;
 }) {
-	const openPlanHint = "Open the Plan tab to review the full plan.";
+	const openPlanHints = [
+		"Open the Plan tab to review the full plan.",
+		"Open the Plan tab to review the latest version.",
+	];
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
@@ -340,6 +343,10 @@ function ChatSession({
 	const mentionInputRef = useRef<MentionInputHandle>(null);
 	const popoverHandleRef = useRef<ContextPopoverHandle>(null);
 	const contextButtonRef = useRef<Element | null>(null);
+	const [headerTab, setHeaderTab] = useState<ChatHeaderTab>("chat");
+	const [planContent, setPlanContent] = useState<string | null>(null);
+	const [planLoading, setPlanLoading] = useState(false);
+	const [planChatMessages, setPlanChatMessages] = useState<UIMessage[]>([]);
 
 	const handleSubmit = useCallback(
 		({ text: formText }: { text: string }) => {
@@ -362,12 +369,31 @@ function ChatSession({
 						});
 
 						if (!response.ok) {
-							throw new Error(`Plan request failed with status ${response.status}`);
+							let errorMessage = `Plan request failed with status ${response.status}`;
+							try {
+								const errorPayload = (await response.json()) as {
+									error?: string;
+								};
+								if (errorPayload.error) {
+									errorMessage = `${errorMessage}: ${errorPayload.error}`;
+								}
+							} catch {
+								// Keep default status-based error when response is not JSON.
+							}
+							throw new Error(errorMessage);
 						}
 
-						const data = (await response.json()) as { plan?: string };
+						const data = (await response.json()) as {
+							plan?: string;
+							mode?: "created" | "revised";
+						};
+						const mode = data.mode === "revised" ? "revised" : "created";
 						const nextPlan = data.plan?.trim();
 						setPlanContent(nextPlan && nextPlan.length > 0 ? nextPlan : "No plan generated.");
+						const assistantMessage =
+							mode === "revised"
+								? "Plan updated. Open the Plan tab to review the latest version."
+								: "Plan generated. Open the Plan tab to review the full plan.";
 						setPlanChatMessages([
 							{
 								id: `${sessionId}-plan-user-${Date.now()}`,
@@ -380,7 +406,7 @@ function ChatSession({
 								parts: [
 									{
 										type: "text",
-										text: "Plan generated. Open the Plan tab to review the full plan.",
+										text: assistantMessage,
 									},
 								],
 							},
@@ -455,10 +481,6 @@ function ChatSession({
 		fileInput?.click();
 	}, []);
 
-	const [headerTab, setHeaderTab] = useState<ChatHeaderTab>("chat");
-	const [planContent, setPlanContent] = useState<string | null>(null);
-	const [planLoading, setPlanLoading] = useState(false);
-	const [planChatMessages, setPlanChatMessages] = useState<UIMessage[]>([]);
 	const planPreview = useMemo(
 		() => buildPlanPreview(planContent, sessionTitle),
 		[planContent, sessionTitle],
@@ -526,6 +548,14 @@ function ChatSession({
 						)}
 					</div>
 				</div>
+			) : headerTab === "experiments" ? (
+				<div className="flex-1 min-h-0 overflow-y-auto">
+					<div className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
+						<p className="text-sm text-muted-foreground/60">
+							No experiments yet for this session.
+						</p>
+					</div>
+				</div>
 			) : hasMessages ? (
 				<Conversation className="flex-1 min-h-0">
 					<ConversationContent className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
@@ -540,9 +570,12 @@ function ChatSession({
 								>
 									{message.parts.map((part) => {
 										if (part.type === "text") {
+											const isPlanPreview = openPlanHints.some((hint) =>
+												part.text.includes(hint),
+											);
 											return message.role === "user" ? (
 												<p key={`${message.id}-text`}>{part.text}</p>
-											) : part.text.includes(openPlanHint) ? (
+											) : isPlanPreview ? (
 												<div
 													key={`${message.id}-text`}
 													className="w-full max-w-[680px] rounded-xl border border-border bg-background px-3 py-2.5"

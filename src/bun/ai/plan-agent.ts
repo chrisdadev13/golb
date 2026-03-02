@@ -48,10 +48,19 @@ Things that could go wrong, assumptions you're making, decisions that need human
 - If the request is unclear or underspecified, note what assumptions you're making rather than asking for clarification.
 - Explore at least 3-5 relevant files before producing the plan. More for complex requests.`;
 
-export async function generatePlan(
-	prompt: string,
-	projectPath: string,
-): Promise<string> {
+type GeneratePlanParams = {
+	prompt: string;
+	projectPath: string;
+	requestMode: "create" | "refine";
+	currentPlan?: string;
+};
+
+export async function generatePlan({
+	prompt,
+	projectPath,
+	requestMode,
+	currentPlan,
+}: GeneratePlanParams): Promise<string> {
 	const { tools } = await createBashTool({
 		uploadDirectory: { source: projectPath, include: "**/*" },
 		maxFiles: 0,
@@ -67,9 +76,20 @@ export async function generatePlan(
 		stopWhen: stepCountIs(20),
 	});
 
-	const result = await agent.generate({
-		prompt,
-	});
+	const finalPrompt =
+		requestMode === "create" || !currentPlan
+			? prompt
+			: `You are revising an existing implementation plan for this repository.
+
+Current plan:
+${currentPlan}
+
+Refinement request:
+${prompt}
+
+Return a full revised plan (not a diff). Keep strong continuity with existing structure unless refinement requires changes.`;
+
+	const result = await agent.generate({ prompt: finalPrompt });
 
 	return result.text.trim();
 }

@@ -325,7 +325,7 @@ export const MessageResponse = memo(
 	({ className, ...props }: MessageResponseProps) => (
 		<Streamdown
 			className={cn(
-				"streamdown-response size-full text-[13px] leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:overflow-hidden [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-border/70 [&_pre]:bg-muted/30 [&_pre]:p-0 [&_pre_code]:block [&_pre_code]:p-3 [&_pre_code]:text-[12px] [&_pre_code]:leading-5",
+				"streamdown-response size-full text-[13px] leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:rounded-md [&_code]:bg-muted/45 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_code]:leading-4 [&_pre]:my-1.5 [&_pre]:overflow-hidden [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/60 [&_pre]:bg-muted/20 [&_pre]:shadow-sm [&_pre]:p-0 [&_pre_code]:block [&_pre_code]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:px-2.5 [&_pre_code]:py-2 [&_pre_code]:text-[11px] [&_pre_code]:leading-4.5",
 				className,
 			)}
 			plugins={streamdownPlugins}
