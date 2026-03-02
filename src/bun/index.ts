@@ -4,7 +4,16 @@ import os from "node:os";
 import { join, resolve } from "node:path";
 import { type IPty, spawn as ptySpawn } from "bun-pty";
 import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
+import { eq, desc } from "drizzle-orm";
 import type { AppRPC } from "../shared/types";
+import { getDb, migrateDb } from "./db";
+import {
+  intents as intentsTable,
+  tasks as tasksTable,
+  sessions as sessionsTable,
+  messages as messagesTable,
+  projects as projectsTable,
+} from "./db/schema";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -549,6 +558,160 @@ const rpc = BrowserView.defineRPC<AppRPC>({
         });
         return { ok: true as const };
       },
+      getIntents: async ({ projectPath }: { projectPath: string }) => {
+        const db = getDb();
+        const project = await db
+          .select({ id: projectsTable.id })
+          .from(projectsTable)
+          .where(eq(projectsTable.path, projectPath))
+          .limit(1);
+
+        if (project.length === 0) {
+          return { intents: [] };
+        }
+
+        const projectId = project[0].id;
+        const allIntents = await db
+          .select()
+          .from(intentsTable)
+          .where(eq(intentsTable.projectId, projectId))
+          .orderBy(intentsTable.order);
+
+        const allTasks = await db
+          .select({
+            id: tasksTable.id,
+            intentId: tasksTable.intentId,
+            title: tasksTable.title,
+            status: tasksTable.status,
+          })
+          .from(tasksTable)
+          .orderBy(tasksTable.order);
+
+        const tasksByIntent = new Map<
+          string,
+          Array<{ id: string; title: string; status: "pending" | "in_progress" | "completed" | "blocked" }>
+        >();
+        for (const task of allTasks) {
+          const list = tasksByIntent.get(task.intentId) ?? [];
+          list.push({
+            id: task.id,
+            title: task.title,
+            status: task.status as "pending" | "in_progress" | "completed" | "blocked",
+          });
+          tasksByIntent.set(task.intentId, list);
+        }
+
+        const result = allIntents.map((intent) => {
+          const tasks = tasksByIntent.get(intent.id) ?? [];
+          return {
+            id: intent.id,
+            title: intent.title,
+            type: intent.type as "feature" | "experiment",
+            status: intent.status as "active" | "completed" | "killed" | "blocked",
+            experimentVerdict: (intent.experimentVerdict as "kept" | "killed") ?? null,
+            taskCount: tasks.length,
+            completedTaskCount: tasks.filter((t) => t.status === "completed").length,
+            tasks,
+          };
+        });
+
+        return { intents: result };
+      },
+      getActiveSession: async ({ projectPath }: { projectPath: string }) => {
+        const db = getDb();
+        const project = await db
+          .select({ id: projectsTable.id })
+          .from(projectsTable)
+          .where(eq(projectsTable.path, projectPath))
+          .limit(1);
+
+        if (project.length === 0) return null;
+
+        const projectId = project[0].id;
+        const session = await db
+          .select({ id: sessionsTable.id })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.projectId, projectId))
+          .orderBy(desc(sessionsTable.createdAt))
+          .limit(1);
+
+        if (session.length === 0) return null;
+
+        const sessionId = session[0].id;
+        const msgs = await db
+          .select({
+            id: messagesTable.id,
+            role: messagesTable.role,
+            parts: messagesTable.parts,
+            createdAt: messagesTable.createdAt,
+          })
+          .from(messagesTable)
+          .where(eq(messagesTable.sessionId, sessionId))
+          .orderBy(messagesTable.createdAt);
+
+        return {
+          sessionId,
+          messages: msgs.map((m) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant" | "system",
+            parts: m.parts as Array<Record<string, unknown>>,
+            createdAt: m.createdAt?.toISOString() ?? new Date().toISOString(),
+          })),
+        };
+      },
+      getSessions: async ({ projectPath }: { projectPath: string }) => {
+        const db = getDb();
+        const project = await db
+          .select({ id: projectsTable.id })
+          .from(projectsTable)
+          .where(eq(projectsTable.path, projectPath))
+          .limit(1);
+
+        if (project.length === 0) return { sessions: [] };
+
+        const projectId = project[0].id;
+        const rows = await db
+          .select({
+            id: sessionsTable.id,
+            title: sessionsTable.title,
+            status: sessionsTable.status,
+            createdAt: sessionsTable.createdAt,
+          })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.projectId, projectId))
+          .orderBy(desc(sessionsTable.createdAt));
+
+        return {
+          sessions: rows.map((s) => ({
+            id: s.id,
+            title: s.title,
+            status: s.status as "active" | "completed",
+            createdAt: s.createdAt?.toISOString() ?? new Date().toISOString(),
+          })),
+        };
+      },
+      getSessionMessages: async ({ sessionId }: { sessionId: string }) => {
+        const db = getDb();
+        const msgs = await db
+          .select({
+            id: messagesTable.id,
+            role: messagesTable.role,
+            parts: messagesTable.parts,
+            createdAt: messagesTable.createdAt,
+          })
+          .from(messagesTable)
+          .where(eq(messagesTable.sessionId, sessionId))
+          .orderBy(messagesTable.createdAt);
+
+        return {
+          messages: msgs.map((m) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant" | "system",
+            parts: m.parts as Array<Record<string, unknown>>,
+            createdAt: m.createdAt?.toISOString() ?? new Date().toISOString(),
+          })),
+        };
+      },
       terminalCreate: async ({
         cols,
         rows,
@@ -631,7 +794,11 @@ const rpc = BrowserView.defineRPC<AppRPC>({
   },
 });
 
-// Create the main application window
+await migrateDb();
+
+const { startChatServer } = await import("./ai/chat-server");
+startChatServer();
+
 const url = await getMainViewUrl();
 
 new BrowserWindow({

@@ -163,6 +163,62 @@ export async function terminalKill(options: {
   await getRpc().request.terminalKill(options);
 }
 
+export type SidebarIntent = {
+  id: string;
+  title: string;
+  type: "feature" | "experiment";
+  status: "active" | "completed" | "killed" | "blocked";
+  experimentVerdict: "kept" | "killed" | null;
+  taskCount: number;
+  completedTaskCount: number;
+  tasks: Array<{
+    id: string;
+    title: string;
+    status: "pending" | "in_progress" | "completed" | "blocked";
+  }>;
+};
+
+export async function getIntents(
+  projectPath: string,
+): Promise<SidebarIntent[]> {
+  const result = await getRpc().request.getIntents({ projectPath });
+  return result.intents;
+}
+
+export type SessionMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  parts: Array<Record<string, unknown>>;
+  createdAt: string;
+};
+
+export async function getActiveSession(
+  projectPath: string,
+): Promise<{ sessionId: string; messages: SessionMessage[] } | null> {
+  return getRpc().request.getActiveSession({ projectPath });
+}
+
+export type SidebarSession = {
+  id: string;
+  title: string | null;
+  status: "active" | "completed";
+  createdAt: string;
+};
+
+export async function getSessions(
+  projectPath: string,
+): Promise<SidebarSession[]> {
+  const result = await getRpc().request.getSessions({ projectPath });
+  return result.sessions;
+}
+
+export async function getSessionMessages(
+  sessionId: string,
+): Promise<SessionMessage[]> {
+  const result = await getRpc().request.getSessionMessages({ sessionId });
+  return result.messages;
+}
+
 export function subscribeTerminalData(
   subscriber: (payload: TerminalDataPayload) => void,
 ) {

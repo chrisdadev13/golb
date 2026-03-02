@@ -91,6 +91,59 @@ export type AppRPC = {
         params: { terminalId: string };
         response: { ok: true };
       };
+      getIntents: {
+        params: { projectPath: string };
+        response: {
+          intents: Array<{
+            id: string;
+            title: string;
+            type: "feature" | "experiment";
+            status: "active" | "completed" | "killed" | "blocked";
+            experimentVerdict: "kept" | "killed" | null;
+            taskCount: number;
+            completedTaskCount: number;
+            tasks: Array<{
+              id: string;
+              title: string;
+              status: "pending" | "in_progress" | "completed" | "blocked";
+            }>;
+          }>;
+        };
+      };
+      getActiveSession: {
+        params: { projectPath: string };
+        response: {
+          sessionId: string;
+          messages: Array<{
+            id: string;
+            role: "user" | "assistant" | "system";
+            parts: Array<Record<string, unknown>>;
+            createdAt: string;
+          }>;
+        } | null;
+      };
+      getSessions: {
+        params: { projectPath: string };
+        response: {
+          sessions: Array<{
+            id: string;
+            title: string | null;
+            status: "active" | "completed";
+            createdAt: string;
+          }>;
+        };
+      };
+      getSessionMessages: {
+        params: { sessionId: string };
+        response: {
+          messages: Array<{
+            id: string;
+            role: "user" | "assistant" | "system";
+            parts: Array<Record<string, unknown>>;
+            createdAt: string;
+          }>;
+        };
+      };
     };
     messages: Record<string, never>;
   }>;

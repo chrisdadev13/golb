@@ -4,10 +4,12 @@ import {
   ChevronLeft,
   ChevronRight,
   GitCommitHorizontal,
+  PanelLeft,
   SquareTerminal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getGitFileDiffs } from "@/lib/rpc";
+import { toggleSidebar } from "@/lib/sidebar-state";
 import { useTabsContext } from "@/lib/tabs-context";
 import { useDiffPanel } from "@/lib/diff-panel-context";
 import { useTerminalPanel } from "@/lib/terminal-panel-context";
@@ -67,7 +69,7 @@ export function TitleBar() {
 
   return (
     <div className="electrobun-webkit-app-region-drag w-full flex items-center pl-18 border-b bg-muted/50 z-50 pr-2">
-      <div className="electrobun-webkit-app-region-no-drag flex items-center">
+      <div className="electrobun-webkit-app-region-no-drag flex-1 flex items-center min-w-0">
         <Button
           size="icon-xs"
           variant="ghost"
@@ -86,44 +88,57 @@ export function TitleBar() {
         >
           <ChevronRight />
         </Button>
+        {isWorkspace && (
+          <>
+            <Separator orientation="vertical" className="h-4 mx-0.5" />
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              tooltip="Toggle sidebar"
+              onClick={toggleSidebar}
+            >
+              <PanelLeft />
+            </Button>
+          </>
+        )}
       </div>
       <WorkspaceTabs />
-      {isWorkspace && (
-        <div className="electrobun-webkit-app-region-no-drag flex items-center gap-1.5">
-          <ButtonGroup>
-            <Button variant="outline" size="xs">
+      <div className="electrobun-webkit-app-region-no-drag flex-1 flex items-center justify-end gap-1.5 min-w-0">
+        {isWorkspace && (
+          <>
+            <ButtonGroup>
+              <Button variant="outline" size="xs">
+                <Box className="size-3.5" />
+                Open
+              </Button>
+              <Button variant="outline" size="xs">
+                <GitCommitHorizontal className="size-3.5" />
+                Commit
+              </Button>
+            </ButtonGroup>
+            <Separator orientation="vertical" className="h-4" />
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              tooltip="Terminal"
+              onClick={toggleTerminal}
+            >
+              <SquareTerminal />
+            </Button>
+            <Button size="xs" variant="ghost" tooltip="Diffs" onClick={toggleDiffPanel}>
               <Box className="size-3.5" />
-              Open
-              {/* <ChevronDown className="size-2.5 opacity-50" /> */}
-            </Button>
-            <Button variant="outline" size="xs">
-              <GitCommitHorizontal className="size-3.5" />
-              Commit
-              {/* <ChevronDown className="size-2.5 opacity-50" /> */}
-            </Button>
-          </ButtonGroup>
-          <Separator orientation="vertical" className="h-4" />
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            tooltip="Terminal"
-            onClick={toggleTerminal}
-          >
-            <SquareTerminal />
-          </Button>
-          <Button size="xs" variant="ghost" tooltip="Diffs" onClick={toggleDiffPanel}>
-            <Box className="size-3.5" />
-            <span className="text-xs">
-              <span className="text-emerald-600 dark:text-emerald-400">
-                +{diffTotals.additions}
-              </span>{" "}
-              <span className="text-red-600 dark:text-red-400">
-                -{diffTotals.deletions}
+              <span className="text-xs">
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  +{diffTotals.additions}
+                </span>{" "}
+                <span className="text-red-600 dark:text-red-400">
+                  -{diffTotals.deletions}
+                </span>
               </span>
-            </span>
-          </Button>
-        </div>
-      )}
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

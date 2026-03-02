@@ -1,12 +1,16 @@
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import {
 	Bug,
 	CircleDashed,
 	FlaskConical,
 	FolderOpen,
 	GitBranch,
+	Loader2,
 	PencilLine,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { nanoid } from "nanoid";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Select,
 	SelectItem,
@@ -15,15 +19,33 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import type { ContextItem } from "@/lib/context-types";
-import { getGitBranches, getGitStatus } from "@/lib/rpc";
+import {
+	getActiveSession,
+	getGitBranches,
+	getGitStatus,
+	getSessionMessages,
+	getSessions,
+} from "@/lib/rpc";
+import { useSidebarOpen } from "@/lib/sidebar-state";
+import { cn } from "@/lib/utils";
 import {
 	ContextPopover,
 	type ContextPopoverHandle,
 } from "../components/ai-elements/context-popover";
 import {
+	Conversation,
+	ConversationContent,
+	ConversationScrollButton,
+} from "../components/ai-elements/conversation";
+import {
 	MentionInput,
 	type MentionInputHandle,
 } from "../components/ai-elements/mention-input";
+import {
+	Message,
+	MessageContent,
+	MessageResponse,
+} from "../components/ai-elements/message";
 import {
 	PromptInput,
 	PromptInputButton,
@@ -31,35 +53,125 @@ import {
 	PromptInputSubmit,
 	PromptInputTools,
 } from "../components/ai-elements/prompt-input";
+import { WorkspaceSidebar } from "../components/workspace-sidebar";
 
-export default function Home({
-	projectPath,
+const promptModeItems: Array<{
+	label: string;
+	value: "build" | "plan" | "debug" | "experiment";
+	icon: React.ComponentType<{ className?: string }>;
+}> = [
+	{ label: "Build", value: "build", icon: CircleDashed },
+	{ label: "Plan", value: "plan", icon: PencilLine },
+	{ label: "Experiment", value: "experiment", icon: FlaskConical },
+	{ label: "Debug", value: "debug", icon: Bug },
+];
+
+type ChatHeaderTab = "chat" | "plan" | "history";
+
+function ChatHeader({
+	title,
+	activeTab,
+	onTabChange,
 }: {
-	projectPath: string;
-	tabId: string;
+	title: string;
+	activeTab: ChatHeaderTab;
+	onTabChange: (tab: ChatHeaderTab) => void;
 }) {
-	const projectName = projectPath.split("/").pop() || "project";
+	const tabs: { label: string; value: ChatHeaderTab }[] = [
+		{ label: "Chat", value: "chat" },
+		{ label: "Plan", value: "plan" },
+		{ label: "History", value: "history" },
+	];
 
-	const [branches, setBranches] = useState<
-		{ name: string; current: boolean }[]
-	>([]);
-	const [currentBranch, setCurrentBranch] = useState<string | null>(null);
-	const [changesCount, setChangesCount] = useState(0);
+	return (
+		<div className="shrink-0 pt-4 pb-2">
+			<div className="mx-auto w-full max-w-2xl px-6 flex items-center justify-between">
+				<span className="text-sm font-medium truncate text-foreground/80">
+					{title}
+				</span>
+				<div className="shrink-0 flex items-center rounded-md border border-border overflow-hidden">
+					{tabs.map((tab) => (
+						<button
+							key={tab.value}
+							type="button"
+							onClick={() => onTabChange(tab.value)}
+							className={cn(
+								"px-2.5 py-1 text-xs font-medium transition-colors",
+								activeTab === tab.value
+									? "bg-foreground/10 text-foreground"
+									: "text-muted-foreground hover:text-foreground hover:bg-muted",
+							)}
+						>
+							{tab.label}
+						</button>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
 
+function ChatSession({
+	sessionId,
+	sessionTitle,
+	projectPath,
+	projectName,
+	active,
+	initialMessages,
+	onStreamingChange,
+	onFinish,
+	branches,
+	currentBranch,
+	onBranchChange,
+	changesCount,
+}: {
+	sessionId: string;
+	sessionTitle: string;
+	projectPath: string;
+	projectName: string;
+	active: boolean;
+	initialMessages: UIMessage[] | undefined;
+	onStreamingChange: (sessionId: string, streaming: boolean) => void;
+	onFinish: () => void;
+	branches: { name: string; current: boolean }[];
+	currentBranch: string | null;
+	onBranchChange: (branch: string | null) => void;
+	changesCount: number;
+}) {
+	const transport = useMemo(
+		() =>
+			new DefaultChatTransport({
+				api: "http://localhost:3141/api/chat",
+				body: () => ({ sessionId, projectPath }),
+				prepareReconnectToStreamRequest: ({ id }) => ({
+					api: `http://localhost:3141/api/chat/${id}/stream`,
+				}),
+			}),
+		[sessionId, projectPath],
+	);
+
+	const { messages, sendMessage, status } = useChat({
+		id: sessionId,
+		transport,
+		messages: initialMessages,
+		resume: true,
+		onFinish: () => {
+			onFinish();
+		},
+	});
+
+	const prevStreamingRef = useRef(false);
 	useEffect(() => {
-		getGitBranches(projectPath).then((b) => {
-			setBranches(b);
-			const active = b.find((br) => br.current);
-			if (active) setCurrentBranch(active.name);
-		});
-		getGitStatus(projectPath).then((changes) => {
-			setChangesCount(changes.length);
-		});
-	}, [projectPath]);
+		const isStreaming = status === "streaming" || status === "submitted";
+		if (isStreaming !== prevStreamingRef.current) {
+			prevStreamingRef.current = isStreaming;
+			onStreamingChange(sessionId, isStreaming);
+		}
+	}, [status, sessionId, onStreamingChange]);
 
 	const [promptMode, setPromptMode] = useState<
-		"agent" | "plan" | "debug" | "experiment"
-	>("agent");
+		"build" | "plan" | "debug" | "experiment"
+	>("build");
 
 	const [popoverOpen, setPopoverOpen] = useState(false);
 	const [popoverAnchor, setPopoverAnchor] = useState<Element | DOMRect | null>(
@@ -70,14 +182,16 @@ export default function Home({
 	const popoverHandleRef = useRef<ContextPopoverHandle>(null);
 	const contextButtonRef = useRef<Element | null>(null);
 
-	const handleSubmit = useCallback(({ text: formText }: { text: string }) => {
-		const text =
-			formText.trim() || mentionInputRef.current?.getText()?.trim() || "";
-		if (!text) return;
-		const contextItems = mentionInputRef.current?.getContextItems() ?? [];
-		console.log("Submit:", { text, contextItems });
-		mentionInputRef.current?.clear();
-	}, []);
+	const handleSubmit = useCallback(
+		({ text: formText }: { text: string }) => {
+			const text =
+				formText.trim() || mentionInputRef.current?.getText()?.trim() || "";
+			if (!text) return;
+			sendMessage({ text });
+			mentionInputRef.current?.clear();
+		},
+		[sendMessage],
+	);
 
 	const handleMentionSubmit = useCallback(
 		(text: string, _contextItems: ContextItem[]) => {
@@ -132,42 +246,91 @@ export default function Home({
 		fileInput?.click();
 	}, []);
 
-	const promptModeItems: Array<{
-		label: string;
-		value: "agent" | "plan" | "debug" | "experiment";
-		icon: React.ComponentType<{ className?: string }>;
-	}> = [
-		{ label: "Agent", value: "agent", icon: CircleDashed },
-		{ label: "Plan", value: "plan", icon: PencilLine },
-		{ label: "Experiment", value: "experiment", icon: FlaskConical },
-		{ label: "Debug", value: "debug", icon: Bug },
-	];
+	const [headerTab, setHeaderTab] = useState<ChatHeaderTab>("chat");
+	const hasMessages = messages.length > 0;
 
 	return (
-		<div className="flex h-full flex-col">
-			<div className="flex-1 flex flex-col justify-end min-h-0 overflow-y-auto">
-				<div className="mx-auto w-full max-w-2xl px-6 pb-5">
-					<p className="text-sm text-muted-foreground/40 font-light">
-						New session
-					</p>
-					<div className="mt-2.5 flex items-center gap-4 text-xs text-muted-foreground/50">
-						<span className="flex items-center gap-1.5">
-							<FolderOpen className="size-3 shrink-0" strokeWidth={1.5} />
-							{projectName}
-						</span>
-						{currentBranch && (
-							<span className="flex items-center gap-1.5">
-								<GitBranch className="size-3 shrink-0" strokeWidth={1.5} />
-								{currentBranch}
-							</span>
+		<div
+			className="flex-1 min-w-0 flex flex-col"
+			style={active ? undefined : { display: "none" }}
+		>
+			{hasMessages && (
+				<ChatHeader
+					title={sessionTitle}
+					activeTab={headerTab}
+					onTabChange={setHeaderTab}
+				/>
+			)}
+			{hasMessages ? (
+				<Conversation className="flex-1 min-h-0">
+					<ConversationContent className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
+						{messages.map((message) => (
+							<Message key={message.id} from={message.role}>
+								<MessageContent
+									className={cn(
+										message.role === "user"
+											? "bg-white! border! w-full! ml-0! border-gray-300"
+											: "is-assistant",
+									)}
+								>
+									{message.parts.map((part) => {
+										if (part.type === "text") {
+											return message.role === "user" ? (
+												<p key={`${message.id}-text`}>{part.text}</p>
+											) : (
+												<MessageResponse key={`${message.id}-text`}>
+													{part.text}
+												</MessageResponse>
+											);
+										}
+										return null;
+									})}
+									{message.role === "assistant" &&
+										status === "streaming" &&
+										message === messages[messages.length - 1] &&
+										!message.parts.some(
+											(p) => p.type === "text" && p.text.length > 0,
+										) && (
+											<Loader2 className="size-4 animate-spin text-muted-foreground" />
+										)}
+								</MessageContent>
+							</Message>
+						))}
+						{status === "submitted" && (
+							<Message from="assistant">
+								<MessageContent>
+									<Loader2 className="size-4 animate-spin text-muted-foreground" />
+								</MessageContent>
+							</Message>
 						)}
-						<span className="flex items-center gap-1.5">
-							<PencilLine className="size-3 shrink-0" strokeWidth={1.5} />
-							just now
-						</span>
+					</ConversationContent>
+					<ConversationScrollButton />
+				</Conversation>
+			) : (
+				<div className="flex-1 flex flex-col justify-end min-h-0 overflow-y-auto">
+					<div className="mx-auto w-full max-w-2xl px-6 pb-5">
+						<p className="text-sm text-muted-foreground/40 font-light">
+							New session
+						</p>
+						<div className="mt-2.5 flex items-center gap-4 text-xs text-muted-foreground/50">
+							<span className="flex items-center gap-1.5">
+								<FolderOpen className="size-3 shrink-0" strokeWidth={1.5} />
+								{projectName}
+							</span>
+							{currentBranch && (
+								<span className="flex items-center gap-1.5">
+									<GitBranch className="size-3 shrink-0" strokeWidth={1.5} />
+									{currentBranch}
+								</span>
+							)}
+							<span className="flex items-center gap-1.5">
+								<PencilLine className="size-3 shrink-0" strokeWidth={1.5} />
+								just now
+							</span>
+						</div>
 					</div>
 				</div>
-			</div>
+			)}
 
 			<div className="shrink-0 mx-auto w-full max-w-2xl px-6 pb-4">
 				<PromptInput
@@ -189,7 +352,7 @@ export default function Home({
 								value={promptMode}
 								onValueChange={(v) => {
 									if (
-										v === "agent" ||
+										v === "build" ||
 										v === "plan" ||
 										v === "debug" ||
 										v === "experiment"
@@ -264,7 +427,7 @@ export default function Home({
 					{branches.length > 0 && (
 						<Select
 							value={currentBranch ?? undefined}
-							onValueChange={setCurrentBranch}
+							onValueChange={onBranchChange}
 						>
 							<SelectTrigger
 								size="sm"
@@ -287,6 +450,164 @@ export default function Home({
 					)}
 				</div>
 			</div>
+		</div>
+	);
+}
+
+export default function Home({
+	projectPath,
+}: {
+	projectPath: string;
+	tabId: string;
+}) {
+	const sidebarOpen = useSidebarOpen();
+	const projectName = projectPath.split("/").pop() || "project";
+
+	const [branches, setBranches] = useState<
+		{ name: string; current: boolean }[]
+	>([]);
+	const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+	const [changesCount, setChangesCount] = useState(0);
+
+	const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+	const [streamingSessions, setStreamingSessions] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const sessionInitDataRef = useRef<Map<string, UIMessage[] | undefined>>(
+		new Map(),
+	);
+	const [sidebarKey, setSidebarKey] = useState(0);
+	const [sessionTitles, setSessionTitles] = useState<Record<string, string>>(
+		{},
+	);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: sidebarKey triggers refetch for title updates
+	useEffect(() => {
+		getSessions(projectPath).then((sessions) => {
+			const titles: Record<string, string> = {};
+			for (const s of sessions) {
+				if (s.title) titles[s.id] = s.title;
+			}
+			setSessionTitles(titles);
+		});
+	}, [projectPath, sidebarKey]);
+
+	useEffect(() => {
+		getGitBranches(projectPath).then((b) => {
+			setBranches(b);
+			const active = b.find((br) => br.current);
+			if (active) setCurrentBranch(active.name);
+		});
+		getGitStatus(projectPath).then((changes) => {
+			setChangesCount(changes.length);
+		});
+	}, [projectPath]);
+
+	useEffect(() => {
+		getActiveSession(projectPath).then((result) => {
+			if (result) {
+				const msgs = result.messages.map((m) => ({
+					id: m.id,
+					role: m.role,
+					parts: m.parts as UIMessage["parts"],
+					createdAt: new Date(m.createdAt),
+				}));
+				sessionInitDataRef.current.set(result.sessionId, msgs);
+				setActiveSessionId(result.sessionId);
+			} else {
+				const newId = nanoid();
+				sessionInitDataRef.current.set(newId, undefined);
+				setActiveSessionId(newId);
+			}
+		});
+	}, [projectPath]);
+
+	const mountedSessionIds = useMemo(() => {
+		if (!activeSessionId) return [];
+		const set = new Set(streamingSessions);
+		set.add(activeSessionId);
+		return Array.from(set);
+	}, [activeSessionId, streamingSessions]);
+
+	const handleStreamingChange = useCallback(
+		(sessionId: string, streaming: boolean) => {
+			setStreamingSessions((prev) => {
+				const next = new Set(prev);
+				if (streaming) {
+					next.add(sessionId);
+				} else {
+					next.delete(sessionId);
+				}
+				return next;
+			});
+		},
+		[],
+	);
+
+	const handleFinish = useCallback(() => {
+		setSidebarKey((k) => k + 1);
+	}, []);
+
+	const startNewSession = useCallback(() => {
+		const newId = nanoid();
+		sessionInitDataRef.current.set(newId, undefined);
+		setActiveSessionId(newId);
+	}, []);
+
+	const switchToSession = useCallback(
+		(targetId: string) => {
+			if (targetId === activeSessionId) return;
+
+			if (streamingSessions.has(targetId)) {
+				setActiveSessionId(targetId);
+				return;
+			}
+
+			getSessionMessages(targetId).then((msgs) => {
+				const uiMsgs = msgs.map((m) => ({
+					id: m.id,
+					role: m.role,
+					parts: m.parts as UIMessage["parts"],
+					createdAt: new Date(m.createdAt),
+				}));
+				sessionInitDataRef.current.set(targetId, uiMsgs);
+				setActiveSessionId(targetId);
+			});
+		},
+		[activeSessionId, streamingSessions],
+	);
+
+	if (!activeSessionId) return null;
+
+	return (
+		<div className="flex h-full">
+			{sidebarOpen && (
+				<WorkspaceSidebar
+					projectPath={projectPath}
+					activeSessionId={activeSessionId}
+					streamingSessions={streamingSessions}
+					refreshKey={sidebarKey}
+					onNewChat={startNewSession}
+					onSelectSession={switchToSession}
+				/>
+			)}
+			{mountedSessionIds.map((sid) => (
+				<ChatSession
+					key={sid}
+					sessionId={sid}
+					sessionTitle={sessionTitles[sid] || "New chat"}
+					projectPath={projectPath}
+					projectName={projectName}
+					active={sid === activeSessionId}
+					initialMessages={sessionInitDataRef.current.get(sid)}
+					onStreamingChange={handleStreamingChange}
+					onFinish={handleFinish}
+					branches={branches}
+					currentBranch={currentBranch}
+					onBranchChange={setCurrentBranch}
+					changesCount={changesCount}
+				/>
+			))}
 		</div>
 	);
 }

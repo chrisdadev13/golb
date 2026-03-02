@@ -52,8 +52,8 @@ export default function IndexPage() {
   const [projects] = useState<Project[]>(() => getRecentProjects());
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [promptMode, setPromptMode] = useState<
-    "agent" | "plan" | "debug" | "experiment"
-  >("agent");
+    "build" | "plan" | "debug" | "experiment"
+  >("build");
   const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(
     () => getRecentProjects()[0]?.path ?? null,
   );
@@ -156,10 +156,10 @@ export default function IndexPage() {
 
   const promptModeItems: Array<{
     label: string;
-    value: "agent" | "plan" | "debug" | "experiment";
+    value: "build" | "plan" | "debug" | "experiment";
     icon: React.ComponentType<{ className?: string }>;
   }> = [
-    { label: "Agent", value: "agent", icon: CircleDashed },
+    { label: "Build", value: "build", icon: CircleDashed },
     { label: "Plan", value: "plan", icon: PencilLine },
     { label: "Experiment", value: "experiment", icon: FlaskConical },
     { label: "Debug", value: "debug", icon: Bug },
@@ -231,7 +231,7 @@ export default function IndexPage() {
                 value={promptMode}
                 onValueChange={(v) => {
                   if (
-                    v === "agent" ||
+                    v === "build" ||
                     v === "plan" ||
                     v === "debug" ||
                     v === "experiment"

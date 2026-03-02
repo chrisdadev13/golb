@@ -1,9 +1,16 @@
+export type CodebaseMemory = {
+  conventions: string[];
+  architecture: string[];
+  knownGotchas: string[];
+};
+
 export type Project = {
   id: string;
   name: string;
   path: string;
   lastOpened: string;
   description?: string;
+  codebaseMemory?: CodebaseMemory;
 };
 
 const STORAGE_KEY = "golb-recent-projects";
@@ -29,7 +36,11 @@ export function addRecentProject(project: Omit<Project, "id" | "lastOpened">): P
   };
 
   if (existing !== -1) {
-    projects[existing] = { ...projects[existing], lastOpened: entry.lastOpened };
+    projects[existing] = {
+      ...projects[existing],
+      ...project,
+      lastOpened: entry.lastOpened,
+    };
   } else {
     projects.unshift(entry);
   }
