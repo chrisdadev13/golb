@@ -371,14 +371,6 @@ export default function IndexPage() {
               >
                 @ Context
               </PromptInputButton>
-              <PromptInputButton
-                size="xs"
-                variant="outline"
-                className="text-xs! h-6!"
-                onClick={() => setMistralDialogOpen(true)}
-              >
-                {mistralKeyConfigured === true ? "Update API Key" : "Set API Key"}
-              </PromptInputButton>
             </PromptInputTools>
             <PromptInputSubmit
               size="icon-xs"
@@ -454,6 +446,11 @@ export default function IndexPage() {
             <Button onClick={handleOpenFolder} variant="outline" size="sm">
               <FolderOpen className="size-4 text-muted-foreground" />
               <span className="text-sm font-medium">Open folder</span>
+            </Button>
+            <Button onClick={() => setMistralDialogOpen(true)} variant="outline" size="sm">
+              <span className="text-sm font-medium">
+                {mistralKeyConfigured === true ? "Update API Key" : "Set API Key"}
+              </span>
             </Button>
           </div>
         </div>

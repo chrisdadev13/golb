@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import os from "node:os";
 import { join, resolve } from "node:path";
 import { type IPty, spawn as ptySpawn } from "bun-pty";
-import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
+import { ApplicationMenu, BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
 import { and, desc, eq, or } from "drizzle-orm";
 import type { AppRPC } from "../shared/types";
 import { getDb, migrateDb } from "./db";
@@ -851,6 +851,31 @@ await migrateDb();
 
 const { startChatServer } = await import("./ai/chat-server");
 startChatServer();
+
+ApplicationMenu.setApplicationMenu([
+  {
+    label: "Golb",
+    submenu: [
+      { role: "hide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  },
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "pasteAndMatchStyle" },
+      { role: "delete" },
+      { role: "selectAll" },
+    ],
+  },
+]);
 
 const url = await getMainViewUrl();
 
