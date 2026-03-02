@@ -1,0 +1,46 @@
+src/bun/ai/plan-agent.ts
+  4ae1469821424eae 51-63,79-92
+src/bun/ai/chat-server.ts
+  4ae1469821424eae 14,247-282,296,324-329,333,417-448,450,452
+src/mainview/pages/home.tsx
+  4ae1469821424eae 74,168-169,176,210,241,299-302,372-383,387-390,393-396,409,551-558,573-575,578
+src/mainview/components/diff-panel.tsx
+  498ce3f0254b737d 2,24-31,355-386,388-389
+src/mainview/components/ai-elements/message.tsx
+  4ae1469821424eae 328
+src/bun/index.ts
+  4ae1469821424eae 7,693-695,726-728
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "fab11b9b70f22d9f3bf84df3d710fcf2549d018d",
+  "prompts": {
+    "498ce3f0254b737d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c059c66a-f05f-4c69-a4e3-a92672e67b1a",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 43,
+      "total_deletions": 13,
+      "accepted_lines": 43,
+      "overriden_lines": 0
+    },
+    "4ae1469821424eae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bcf834-9446-4ccb-bcab-8c6ad2ec2397",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 380,
+      "total_deletions": 201,
+      "accepted_lines": 209,
+      "overriden_lines": 0
+    }
+  }
+}
