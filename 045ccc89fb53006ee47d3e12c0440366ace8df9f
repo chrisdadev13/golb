@@ -1,0 +1,29 @@
+src/bun/ai/build-agent.ts
+  77f1b8f8b20aacae 10,93-94
+src/bun/ai/chat-server.ts
+  77f1b8f8b20aacae 156
+src/mainview/pages/index.tsx
+  77f1b8f8b20aacae 4,406-407,412-431
+src/bun/ai/plan-agent.ts
+  77f1b8f8b20aacae 3,65-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "045ccc89fb53006ee47d3e12c0440366ace8df9f",
+  "prompts": {
+    "77f1b8f8b20aacae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae5350e3-f7d9-4071-abc9-64ef30a34d0d",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 34,
+      "total_deletions": 18,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
