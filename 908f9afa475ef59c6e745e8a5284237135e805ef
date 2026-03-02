@@ -1,0 +1,27 @@
+src/mainview/components/ai-elements/mention-input.tsx
+  8fa9867b2ce8181e 408-409
+src/bun/index.ts
+  8fa9867b2ce8181e 6,855-879
+src/mainview/pages/index.tsx
+  8fa9867b2ce8181e 450-453
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.7",
+  "base_commit_sha": "908f9afa475ef59c6e745e8a5284237135e805ef",
+  "prompts": {
+    "8fa9867b2ce8181e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "606fdc59-5f46-488b-a1a9-aede0dfbe1c2",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Chris <92900301+chrisdadev13@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 28,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    }
+  }
+}
