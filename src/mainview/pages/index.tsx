@@ -1,6 +1,7 @@
 import {
   Bug,
   CircleDashed,
+  ClipboardPaste,
   FlaskConical,
   FolderCode,
   FolderOpen,
@@ -402,13 +403,32 @@ export default function IndexPage() {
               className="space-y-3 px-6"
               onSubmit={handleSaveMistralApiKey}
             >
-              <Input
-                autoFocus
-                type="password"
-                placeholder="mistral api key"
-                value={mistralApiKey}
-                onChange={(event) => setMistralApiKey(event.currentTarget.value)}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  autoFocus
+                  type="password"
+                  placeholder="mistral api key"
+                  value={mistralApiKey}
+                  onChange={(event) => setMistralApiKey(event.currentTarget.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      if (text) setMistralApiKey(text);
+                    } catch {
+                      // Clipboard access denied
+                    }
+                  }}
+                >
+                  <ClipboardPaste className="size-3.5" />
+                  Paste
+                </Button>
+              </div>
               {mistralApiKeyError && (
                 <p className="text-xs text-destructive">{mistralApiKeyError}</p>
               )}

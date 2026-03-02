@@ -1,10 +1,6 @@
-import { createMistral } from "@ai-sdk/mistral";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { createBashTool } from "bash-tool";
-
-const mistral = createMistral({
-	apiKey: "m4bRvDtPFUztCe1oGKtYZ20kBw204Iud",
-});
+import { getMistralClient } from "./chat-server";
 
 const PLAN_SYSTEM_PROMPT = `You are Golb Plan Mode, a senior software architect tasked with producing detailed, actionable implementation plans.
 
@@ -65,6 +61,8 @@ export async function generatePlan({
 		uploadDirectory: { source: projectPath, include: "**/*" },
 		maxFiles: 0,
 	});
+
+	const mistral = await getMistralClient(false);
 
 	const agent = new ToolLoopAgent({
 		model: mistral("codestral-latest"),

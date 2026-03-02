@@ -153,7 +153,7 @@ async function resolveMistralApiKey(allowPrompt = true): Promise<string> {
 	return promptedApiKey;
 }
 
-async function getMistralClient(
+export async function getMistralClient(
 	allowPrompt = true,
 ): Promise<ReturnType<typeof createMistral>> {
 	if (cachedMistralClient) {

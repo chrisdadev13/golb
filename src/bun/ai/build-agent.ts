@@ -1,4 +1,3 @@
-import { createMistral } from "@ai-sdk/mistral";
 import {
 	convertToModelMessages,
 	stepCountIs,
@@ -8,10 +7,7 @@ import {
 import { createBashTool } from "bash-tool";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-
-const mistral = createMistral({
-	apiKey: "m4bRvDtPFUztCe1oGKtYZ20kBw204Iud",
-});
+import { getMistralClient } from "./chat-server";
 
 const BUILD_SYSTEM_PROMPT = `You are Golb Build Mode, a senior software engineer working directly in the user's repository.
 
@@ -93,6 +89,8 @@ export async function generateBuildResponse({
 		const message = error instanceof Error ? error.message : "Unknown error";
 		throw new Error(`Failed to initialize builder tools: ${message}`);
 	}
+
+	const mistral = await getMistralClient(false);
 
 	return streamText({
 		model: mistral("codestral-latest"),
