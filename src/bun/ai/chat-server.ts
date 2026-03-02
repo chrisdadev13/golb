@@ -14,7 +14,9 @@ const mistral = createMistral({
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getDb } from "../db";
+import { generatePlan } from "./plan-agent";
 import {
+	historyEvents as historyEventsTable,
 	messages as messagesTable,
 	projects as projectsTable,
 	sessions as sessionsTable,
@@ -124,13 +126,13 @@ async function generateSessionTitle(
 ): Promise<void> {
 	const { text } = await generateText({
 		model: mistral("mistral-small-latest"),
-		prompt: `Generate a short title (max 6 words) for a chat conversation that starts with this user message. Return ONLY the title, no quotes, no punctuation at the end.\n\nUser message: "${firstUserMessage}"`,
+		prompt: `Generate a very short title (2 to 4 words max) for a chat conversation that starts with this user message. Return ONLY the title, no quotes, no punctuation at the end.\n\nUser message: "${firstUserMessage}"`,
 	});
 
 	const title = text
 		.trim()
 		.replace(/^["']|["']$/g, "")
-		.slice(0, 80);
+		.slice(0, 48);
 	if (title) {
 		await getDb()
 			.update(sessionsTable)
@@ -232,6 +234,69 @@ async function handleChatRequest(req: Request): Promise<Response> {
 	});
 }
 
+async function handlePlanRequest(req: Request): Promise<Response> {
+	const body = await req.json();
+	const {
+		prompt,
+		projectPath,
+		sessionId,
+	}: { prompt: string; projectPath: string; sessionId: string } = body;
+	const projectId = await ensureProject(projectPath);
+	await ensureSession(sessionId, projectId);
+	const plan = await generatePlan(prompt, projectPath);
+
+	const planMessages: UIMessage[] = [
+		{
+			id: nanoid(),
+			role: "user",
+			parts: [{ type: "text", text: prompt }],
+		},
+		{
+			id: nanoid(),
+			role: "assistant",
+			parts: [
+				{
+					type: "text",
+					text: "Plan generated. Open the Plan tab to review the full plan.",
+				},
+			],
+		},
+	];
+	await saveMessages(sessionId, planMessages);
+
+	const db = getDb();
+	const session = await db
+		.select({ title: sessionsTable.title })
+		.from(sessionsTable)
+		.where(eq(sessionsTable.id, sessionId))
+		.limit(1);
+	if (session.length > 0 && !session[0].title) {
+		const fallback = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
+		await db
+			.update(sessionsTable)
+			.set({ title: fallback })
+			.where(eq(sessionsTable.id, sessionId));
+	}
+	generateSessionTitle(sessionId, prompt).catch((err) =>
+		console.error("Failed to generate session title:", err),
+	);
+
+	await getDb().insert(historyEventsTable).values({
+		id: nanoid(),
+		projectId,
+		sessionId,
+		type: "plan_created",
+		title: "Plan generated",
+		metadata: { content: plan, prompt },
+		createdAt: new Date(),
+	});
+
+	return new Response(JSON.stringify({ plan }), {
+		status: 200,
+		headers: { ...corsHeaders(), "Content-Type": "application/json" },
+	});
+}
+
 export function startChatServer(): void {
 	Bun.serve({
 		port: CHAT_PORT,
@@ -295,6 +360,21 @@ export function startChatServer(): void {
 					return await handleChatRequest(req);
 				} catch (err) {
 					console.error("Chat server error:", err);
+					return new Response(
+						JSON.stringify({ error: "Internal server error" }),
+						{
+							status: 500,
+							headers: { ...corsHeaders(), "Content-Type": "application/json" },
+						},
+					);
+				}
+			}
+
+			if (url.pathname === "/api/plan" && req.method === "POST") {
+				try {
+					return await handlePlanRequest(req);
+				} catch (err) {
+					console.error("Plan server error:", err);
 					return new Response(
 						JSON.stringify({ error: "Internal server error" }),
 						{

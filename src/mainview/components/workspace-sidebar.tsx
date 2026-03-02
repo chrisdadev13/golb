@@ -6,6 +6,7 @@ import {
 	CircleDashed,
 	Loader2,
 	MessageSquare,
+	PencilLine,
 	Plus,
 	X,
 } from "lucide-react";
@@ -267,6 +268,9 @@ export function WorkspaceSidebar({
 															streamingSessions={streamingSessions ?? new Set()}
 														/>
 														<span>{session.title || "Untitled session"}</span>
+														{session.hasPlan && (
+															<PencilLine className="ml-auto size-3 text-muted-foreground/70" />
+														)}
 													</SidebarMenuButton>
 												</SidebarMenuItem>
 											))}

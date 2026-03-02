@@ -154,4 +154,58 @@
 	body {
 		@apply bg-background text-foreground;
 	}
+
+	.streamdown-response pre {
+		box-shadow: none;
+	}
+
+	.streamdown-response pre code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+			"Liberation Mono", "Courier New", monospace;
+	}
+
+	/* Syntax colors for code plugins that emit Prism/HLJS-like token classes */
+	.streamdown-response .token.property,
+	.streamdown-response .token.attr-name,
+	.streamdown-response .hljs-attr {
+		color: #d97706;
+	}
+
+	.streamdown-response .token.string,
+	.streamdown-response .token.attr-value,
+	.streamdown-response .hljs-string {
+		color: #16a34a;
+	}
+
+	.streamdown-response .token.number,
+	.streamdown-response .token.boolean,
+	.streamdown-response .token.null,
+	.streamdown-response .hljs-number,
+	.streamdown-response .hljs-literal {
+		color: #2563eb;
+	}
+
+	.streamdown-response .token.punctuation {
+		opacity: 0.7;
+	}
+
+	.dark .streamdown-response .token.property,
+	.dark .streamdown-response .token.attr-name,
+	.dark .streamdown-response .hljs-attr {
+		color: #f59e0b;
+	}
+
+	.dark .streamdown-response .token.string,
+	.dark .streamdown-response .token.attr-value,
+	.dark .streamdown-response .hljs-string {
+		color: #4ade80;
+	}
+
+	.dark .streamdown-response .token.number,
+	.dark .streamdown-response .token.boolean,
+	.dark .streamdown-response .token.null,
+	.dark .streamdown-response .hljs-number,
+	.dark .streamdown-response .hljs-literal {
+		color: #60a5fa;
+	}
 }

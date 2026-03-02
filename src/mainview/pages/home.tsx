@@ -10,7 +10,11 @@ import {
 	PencilLine,
 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { codeToHtml } from "shiki";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
 import {
 	Select,
 	SelectItem,
@@ -23,6 +27,7 @@ import {
 	getActiveSession,
 	getGitBranches,
 	getGitStatus,
+	getSessionPlan,
 	getSessionMessages,
 	getSessions,
 } from "@/lib/rpc";
@@ -67,6 +72,159 @@ const promptModeItems: Array<{
 ];
 
 type ChatHeaderTab = "chat" | "plan" | "history";
+
+type PlanPreview = {
+	title: string;
+	summary: string;
+	items: string[];
+	remainingCount: number;
+};
+
+function buildPlanPreview(plan: string | null, fallbackTitle: string): PlanPreview {
+	if (!plan) {
+		return {
+			title: fallbackTitle,
+			summary: "A plan was generated for this session.",
+			items: [],
+			remainingCount: 0,
+		};
+	}
+
+	const lines = plan
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	const headingLine = lines.find((line) => /^#{1,3}\s+/.test(line));
+	const title = headingLine
+		? headingLine.replace(/^#{1,3}\s+/, "").trim()
+		: fallbackTitle;
+
+	const summaryLine = lines.find(
+		(line) =>
+			!/^#{1,3}\s+/.test(line) &&
+			!/^[-*]\s+/.test(line) &&
+			!/^(\d+)\)\s+/.test(line),
+	);
+	const summary = summaryLine ?? "A plan was generated for this session.";
+
+	const allItems = lines
+		.filter((line) => /^[-*]\s+/.test(line))
+		.map((line) => line.replace(/^[-*]\s+/, "").trim())
+		.filter((line) => line.length > 0);
+	const items = allItems.slice(0, 4);
+
+	return {
+		title,
+		summary,
+		items,
+		remainingCount: Math.max(0, allItems.length - items.length),
+	};
+}
+
+function extractLanguageFromClassName(className?: string): string {
+	if (!className) return "plaintext";
+	const match = className.match(/language-([a-zA-Z0-9_-]+)/);
+	return match?.[1] ?? "plaintext";
+}
+
+function PlanCodeBlock({
+	className,
+	children,
+}: {
+	className?: string;
+	children: string;
+}) {
+	const code = children.replace(/\n$/, "");
+	const language = extractLanguageFromClassName(className);
+	const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
+	const [isDark, setIsDark] = useState(false);
+
+	useEffect(() => {
+		if (typeof document === "undefined") return;
+		setIsDark(document.documentElement.classList.contains("dark"));
+	}, []);
+
+	useEffect(() => {
+		let alive = true;
+		void codeToHtml(code, {
+			lang: language,
+			theme: isDark ? "github-dark" : "github-light",
+		})
+			.then((html) => {
+				if (alive) setHighlightedHtml(html);
+			})
+			.catch(() => {
+				if (alive) setHighlightedHtml(null);
+			});
+
+		return () => {
+			alive = false;
+		};
+	}, [code, isDark, language]);
+
+	if (!highlightedHtml) {
+		return (
+			<pre className="mt-2 overflow-x-auto rounded-lg border border-border/70 bg-muted/30 p-3">
+				<code className="text-[11px] leading-4.5">{code}</code>
+			</pre>
+		);
+	}
+
+	return (
+		<div
+			className="mt-2 overflow-hidden rounded-lg border border-border/70 bg-muted/30 text-[11px] [&_pre]:overflow-x-auto [&_pre]:px-3 [&_pre]:py-3 [&_code]:text-[11px] [&_code]:leading-4.5"
+			/* biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki-generated HTML is used only for syntax highlighting. */
+			dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+		/>
+	);
+}
+
+function PlanMarkdown({ content }: { content: string }) {
+	return (
+		<div className="text-[13px] leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5">
+			<ReactMarkdown
+				remarkPlugins={[remarkGfm, remarkBreaks]}
+				components={{
+					h1({ children }) {
+						return (
+							<h3 className="my-2 text-lg font-semibold tracking-tight">{children}</h3>
+						);
+					},
+					h2({ children }) {
+						return (
+							<h4 className="my-2 text-base font-semibold tracking-tight">{children}</h4>
+						);
+					},
+					h3({ children }) {
+						return (
+							<h5 className="my-1.5 text-sm font-semibold tracking-tight">{children}</h5>
+						);
+					},
+					code({ className, children }) {
+						const code = String(children);
+						const language = extractLanguageFromClassName(className);
+						const isBlock = language !== "plaintext" || code.includes("\n");
+						if (!isBlock) {
+							return (
+								<code className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[11px]">
+									{code}
+								</code>
+							);
+						}
+						return (
+							<PlanCodeBlock className={className}>
+								{code}
+							</PlanCodeBlock>
+						);
+					},
+				}}
+			>
+				{content}
+			</ReactMarkdown>
+		</div>
+	);
+}
 
 function ChatHeader({
 	title,
@@ -138,6 +296,7 @@ function ChatSession({
 	onBranchChange: (branch: string | null) => void;
 	changesCount: number;
 }) {
+	const openPlanHint = "Open the Plan tab to review the full plan.";
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
@@ -187,10 +346,60 @@ function ChatSession({
 			const text =
 				formText.trim() || mentionInputRef.current?.getText()?.trim() || "";
 			if (!text) return;
-			sendMessage({ text });
 			mentionInputRef.current?.clear();
+
+			if (promptMode === "plan") {
+				setHeaderTab("plan");
+				setPlanContent(null);
+				setPlanLoading(true);
+
+				void (async () => {
+					try {
+						const response = await fetch("http://localhost:3141/api/plan", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ prompt: text, projectPath, sessionId }),
+						});
+
+						if (!response.ok) {
+							throw new Error(`Plan request failed with status ${response.status}`);
+						}
+
+						const data = (await response.json()) as { plan?: string };
+						const nextPlan = data.plan?.trim();
+						setPlanContent(nextPlan && nextPlan.length > 0 ? nextPlan : "No plan generated.");
+						setPlanChatMessages([
+							{
+								id: `${sessionId}-plan-user-${Date.now()}`,
+								role: "user",
+								parts: [{ type: "text", text }],
+							},
+							{
+								id: `${sessionId}-plan-assistant-${Date.now()}`,
+								role: "assistant",
+								parts: [
+									{
+										type: "text",
+										text: "Plan generated. Open the Plan tab to review the full plan.",
+									},
+								],
+							},
+						]);
+						onFinish();
+					} catch (error) {
+						console.error("Failed to generate plan:", error);
+						setPlanContent("Failed to generate a plan. Please try again.");
+					} finally {
+						setPlanLoading(false);
+					}
+				})();
+
+				return;
+			}
+
+			sendMessage({ text });
 		},
-		[sendMessage],
+		[onFinish, projectPath, promptMode, sendMessage, sessionId],
 	);
 
 	const handleMentionSubmit = useCallback(
@@ -247,24 +456,80 @@ function ChatSession({
 	}, []);
 
 	const [headerTab, setHeaderTab] = useState<ChatHeaderTab>("chat");
-	const hasMessages = messages.length > 0;
+	const [planContent, setPlanContent] = useState<string | null>(null);
+	const [planLoading, setPlanLoading] = useState(false);
+	const [planChatMessages, setPlanChatMessages] = useState<UIMessage[]>([]);
+	const planPreview = useMemo(
+		() => buildPlanPreview(planContent, sessionTitle),
+		[planContent, sessionTitle],
+	);
+	const conversationMessages =
+		messages.length > 0 ? messages : planChatMessages;
+	const hasMessages = conversationMessages.length > 0;
+	const hasPlan = planLoading || planContent !== null;
+
+	useEffect(() => {
+		let cancelled = false;
+		setPlanLoading(true);
+		setPlanChatMessages([]);
+		getSessionPlan(sessionId)
+			.then((plan) => {
+				if (!cancelled) {
+					setPlanContent(plan);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setPlanContent(null);
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setPlanLoading(false);
+				}
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [sessionId]);
 
 	return (
 		<div
 			className="flex-1 min-w-0 flex flex-col"
 			style={active ? undefined : { display: "none" }}
 		>
-			{hasMessages && (
+			{(hasMessages || hasPlan) && (
 				<ChatHeader
 					title={sessionTitle}
 					activeTab={headerTab}
 					onTabChange={setHeaderTab}
 				/>
 			)}
-			{hasMessages ? (
+			{headerTab === "plan" ? (
+				<div className="flex-1 min-h-0 overflow-y-auto">
+					<div className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
+						{planLoading ? (
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
+								<Loader2 className="size-4 animate-spin" />
+								Generating plan...
+							</div>
+						) : planContent ? (
+							<Message from="assistant">
+								<MessageContent className="is-assistant">
+									<PlanMarkdown content={planContent} />
+								</MessageContent>
+							</Message>
+						) : (
+							<p className="text-sm text-muted-foreground/60">
+								No plan yet. Submit a prompt in Plan mode to generate one.
+							</p>
+						)}
+					</div>
+				</div>
+			) : hasMessages ? (
 				<Conversation className="flex-1 min-h-0">
 					<ConversationContent className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
-						{messages.map((message) => (
+						{conversationMessages.map((message) => (
 							<Message key={message.id} from={message.role}>
 								<MessageContent
 									className={cn(
@@ -277,6 +542,51 @@ function ChatSession({
 										if (part.type === "text") {
 											return message.role === "user" ? (
 												<p key={`${message.id}-text`}>{part.text}</p>
+											) : part.text.includes(openPlanHint) ? (
+												<div
+													key={`${message.id}-text`}
+													className="w-full max-w-[680px] rounded-xl border border-border bg-background px-3 py-2.5"
+												>
+													<p className="text-[11px] text-muted-foreground">
+														Plan preview
+													</p>
+													<p className="mt-0.5 text-lg font-semibold text-foreground">
+														{planPreview.title}
+													</p>
+													<p className="mt-1 text-[13px] text-foreground/85">
+														{planPreview.summary}
+													</p>
+													{planPreview.items.length > 0 && (
+														<div className="mt-2 rounded-lg border border-border/70 bg-muted/25 p-2.5">
+															<p className="text-xs text-muted-foreground">
+																{planPreview.remainingCount + planPreview.items.length} remaining to-dos
+															</p>
+															<div className="mt-1.5 space-y-1">
+																{planPreview.items.map((item) => (
+																	<div
+																		key={item}
+																		className="flex items-start gap-2 text-[13px] text-foreground/90"
+																	>
+																		<span className="mt-1 size-2 rounded-full border border-border/80" />
+																		<span>{item}</span>
+																	</div>
+																))}
+															</div>
+															{planPreview.remainingCount > 0 && (
+																<p className="mt-2 text-xs text-muted-foreground">
+																	+ {planPreview.remainingCount} more
+																</p>
+															)}
+														</div>
+													)}
+													<button
+														type="button"
+														onClick={() => setHeaderTab("plan")}
+														className="mt-2 inline-flex h-7 items-center rounded-md border border-border bg-muted/20 px-2.5 text-xs font-medium text-foreground hover:bg-muted"
+													>
+														View Plan
+													</button>
+												</div>
 											) : (
 												<MessageResponse key={`${message.id}-text`}>
 													{part.text}
@@ -287,7 +597,8 @@ function ChatSession({
 									})}
 									{message.role === "assistant" &&
 										status === "streaming" &&
-										message === messages[messages.length - 1] &&
+										message ===
+											conversationMessages[conversationMessages.length - 1] &&
 										!message.parts.some(
 											(p) => p.type === "text" && p.text.length > 0,
 										) && (

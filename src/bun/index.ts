@@ -4,7 +4,7 @@ import os from "node:os";
 import { join, resolve } from "node:path";
 import { type IPty, spawn as ptySpawn } from "bun-pty";
 import { BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import type { AppRPC } from "../shared/types";
 import { getDb, migrateDb } from "./db";
 import {
@@ -13,6 +13,7 @@ import {
   sessions as sessionsTable,
   messages as messagesTable,
   projects as projectsTable,
+  historyEvents as historyEventsTable,
 } from "./db/schema";
 
 const DEV_SERVER_PORT = 5173;
@@ -681,14 +682,60 @@ const rpc = BrowserView.defineRPC<AppRPC>({
           .where(eq(sessionsTable.projectId, projectId))
           .orderBy(desc(sessionsTable.createdAt));
 
+        const planEvents = await db
+          .select({
+            sessionId: historyEventsTable.sessionId,
+          })
+          .from(historyEventsTable)
+          .where(
+            and(
+              eq(historyEventsTable.projectId, projectId),
+              eq(historyEventsTable.type, "plan_created"),
+            ),
+          );
+
+        const sessionIdsWithPlans = new Set(
+          planEvents
+            .map((eventRow) => eventRow.sessionId)
+            .filter((sessionId): sessionId is string => typeof sessionId === "string"),
+        );
+
         return {
           sessions: rows.map((s) => ({
             id: s.id,
             title: s.title,
             status: s.status as "active" | "completed",
+            hasPlan: sessionIdsWithPlans.has(s.id),
             createdAt: s.createdAt?.toISOString() ?? new Date().toISOString(),
           })),
         };
+      },
+      getSessionPlan: async ({ sessionId }: { sessionId: string }) => {
+        const db = getDb();
+        const events = await db
+          .select({
+            metadata: historyEventsTable.metadata,
+          })
+          .from(historyEventsTable)
+          .where(
+            and(
+              eq(historyEventsTable.sessionId, sessionId),
+              eq(historyEventsTable.type, "plan_created"),
+            ),
+          )
+          .orderBy(desc(historyEventsTable.createdAt))
+          .limit(1);
+
+        const latestMetadata = events[0]?.metadata;
+        const plan =
+          latestMetadata &&
+          typeof latestMetadata === "object" &&
+          !Array.isArray(latestMetadata) &&
+          typeof latestMetadata.content === "string"
+            ? latestMetadata.content
+            : null;
+
+        return { plan };
       },
       getSessionMessages: async ({ sessionId }: { sessionId: string }) => {
         const db = getDb();

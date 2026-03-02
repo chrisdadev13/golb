@@ -129,9 +129,14 @@ export type AppRPC = {
             id: string;
             title: string | null;
             status: "active" | "completed";
+            hasPlan: boolean;
             createdAt: string;
           }>;
         };
+      };
+      getSessionPlan: {
+        params: { sessionId: string };
+        response: { plan: string | null };
       };
       getSessionMessages: {
         params: { sessionId: string };

@@ -202,6 +202,7 @@ export type SidebarSession = {
   id: string;
   title: string | null;
   status: "active" | "completed";
+  hasPlan: boolean;
   createdAt: string;
 };
 
@@ -210,6 +211,11 @@ export async function getSessions(
 ): Promise<SidebarSession[]> {
   const result = await getRpc().request.getSessions({ projectPath });
   return result.sessions;
+}
+
+export async function getSessionPlan(sessionId: string): Promise<string | null> {
+  const result = await getRpc().request.getSessionPlan({ sessionId });
+  return result.plan;
 }
 
 export async function getSessionMessages(
