@@ -1,9 +1,16 @@
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { MultiFileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
+import {
+	DefaultChatTransport,
+	type DynamicToolUIPart,
+	type ToolUIPart,
+	type UIMessage,
+} from "ai";
 import {
 	Bug,
 	CircleDashed,
-	FlaskConical,
+	FilePenLine,
+	FileText,
 	FolderOpen,
 	GitBranch,
 	Loader2,
@@ -11,6 +18,7 @@ import {
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { codeToHtml } from "shiki";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -31,6 +39,7 @@ import {
 	getSessionMessages,
 	getSessions,
 } from "@/lib/rpc";
+import { diffsWorkerFactory } from "@/lib/diffs-worker-factory";
 import { useSidebarOpen } from "@/lib/sidebar-state";
 import { cn } from "@/lib/utils";
 import {
@@ -62,16 +71,15 @@ import { WorkspaceSidebar } from "../components/workspace-sidebar";
 
 const promptModeItems: Array<{
 	label: string;
-	value: "build" | "plan" | "debug" | "experiment";
+	value: "build" | "plan" | "debug";
 	icon: React.ComponentType<{ className?: string }>;
 }> = [
 	{ label: "Build", value: "build", icon: CircleDashed },
 	{ label: "Plan", value: "plan", icon: PencilLine },
-	{ label: "Experiment", value: "experiment", icon: FlaskConical },
 	{ label: "Debug", value: "debug", icon: Bug },
 ];
 
-type ChatHeaderTab = "chat" | "plan" | "experiments";
+type ChatHeaderTab = "chat" | "plan";
 
 type PlanPreview = {
 	title: string;
@@ -126,6 +134,427 @@ function extractLanguageFromClassName(className?: string): string {
 	if (!className) return "plaintext";
 	const match = className.match(/language-([a-zA-Z0-9_-]+)/);
 	return match?.[1] ?? "plaintext";
+}
+
+type MessagePart = UIMessage["parts"][number];
+type ToolLikePart = ToolUIPart | DynamicToolUIPart;
+type ToolFilePreview = {
+	kind: "read" | "write";
+	filePath: string;
+	oldContents: string;
+	newContents: string;
+	hasKnownBase: boolean;
+};
+
+const TOOL_DIFF_STYLE: CSSProperties = {
+	"--diffs-font-size": "11px",
+	"--diffs-line-height": "1.35",
+	"--diffs-gap-block": "4px",
+	"--diffs-gap-inline": "6px",
+	"--diffs-font-family":
+		"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+	"--diffs-header-font-family":
+		"Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+	"--diffs-addition-color-override": "rgba(22, 163, 74, 0.5)",
+	"--diffs-deletion-color-override": "rgba(220, 38, 38, 0.5)",
+	"--diffs-modified-color-override": "rgba(59, 130, 246, 0.5)",
+} as CSSProperties;
+
+const TOOL_DIFF_POOL_OPTIONS = {
+	workerFactory: diffsWorkerFactory,
+	poolSize: 2,
+};
+
+const TOOL_DIFF_HIGHLIGHTER_OPTIONS = {
+	theme: { light: "github-light", dark: "github-light" } as const,
+	tokenizeMaxLineLength: 700,
+	lineDiffType: "word-alt" as const,
+};
+
+function isToolLikePart(part: MessagePart): part is ToolLikePart {
+	if (part.type === "dynamic-tool") {
+		return "state" in part && "input" in part;
+	}
+	return (
+		part.type.startsWith("tool-") &&
+		"state" in part &&
+		"input" in part &&
+		"output" in part
+	);
+}
+
+function getToolDisplayName(part: ToolLikePart): string {
+	if (part.type === "dynamic-tool") {
+		return part.toolName;
+	}
+	return part.type.replace(/^tool-/, "");
+}
+
+function formatToolName(name: string): string {
+	return name
+		.replace(/[-_]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function getToolStateLabel(state: ToolLikePart["state"]): string {
+	if (state === "input-streaming" || state === "input-available") {
+		return "Running";
+	}
+	if (state === "output-available") {
+		return "Completed";
+	}
+	if (state === "output-error") {
+		return "Failed";
+	}
+	if (state === "output-denied") {
+		return "Denied";
+	}
+	if (state === "approval-requested") {
+		return "Awaiting approval";
+	}
+	return "Approved";
+}
+
+function summarizeToolInput(input: ToolLikePart["input"]): string | null {
+	if (!input || typeof input !== "object" || Array.isArray(input)) {
+		return null;
+	}
+	const inputData = input as Record<string, unknown>;
+	if (typeof inputData.command === "string") {
+		return inputData.command;
+	}
+	if (typeof inputData.path === "string") {
+		return inputData.path;
+	}
+	if (typeof inputData.query === "string") {
+		return inputData.query;
+	}
+	const keys = Object.keys(inputData);
+	if (keys.length === 0) {
+		return null;
+	}
+	return `${keys.length} parameter${keys.length === 1 ? "" : "s"}`;
+}
+
+function summarizeToolOutput(part: ToolLikePart): string | null {
+	if (part.state === "output-error" && part.errorText) {
+		return part.errorText;
+	}
+	if (!part.output) {
+		return null;
+	}
+	if (typeof part.output === "string") {
+		const singleLine = part.output.trim().split("\n")[0];
+		return singleLine.length > 140 ? `${singleLine.slice(0, 137)}...` : singleLine;
+	}
+	if (typeof part.output === "object" && !Array.isArray(part.output)) {
+		const outputData = part.output as Record<string, unknown>;
+		if (typeof outputData.stdout === "string" && outputData.stdout.trim().length > 0) {
+			const firstLine = outputData.stdout.trim().split("\n")[0];
+			return firstLine.length > 140 ? `${firstLine.slice(0, 137)}...` : firstLine;
+		}
+		if (typeof outputData.success === "boolean") {
+			return outputData.success ? "Saved" : "Did not save";
+		}
+		if (typeof outputData.exitCode === "number") {
+			return `Exit code ${outputData.exitCode}`;
+		}
+	}
+	return null;
+}
+
+function toObjectRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function getStringValue(record: Record<string, unknown>, key: string): string | null {
+	const value = record[key];
+	return typeof value === "string" ? value : null;
+}
+
+function getFirstObjectFromArray(value: unknown): Record<string, unknown> | null {
+	if (!Array.isArray(value) || value.length === 0) {
+		return null;
+	}
+	const first = value[0];
+	return toObjectRecord(first);
+}
+
+function extractReadFileContent(part: ToolLikePart): { filePath: string; content: string } | null {
+	const toolName = getToolDisplayName(part).toLowerCase();
+	if (toolName !== "readfile") {
+		return null;
+	}
+	const inputData = toObjectRecord(part.input);
+	const outputData = toObjectRecord(part.output);
+	if (!inputData) {
+		return null;
+	}
+	const filePath = getStringValue(inputData, "path");
+	if (!filePath) {
+		return null;
+	}
+	const content =
+		typeof part.output === "string"
+			? part.output
+			: outputData
+				? getStringValue(outputData, "content") ??
+					getStringValue(outputData, "contents") ??
+					getStringValue(outputData, "text") ??
+					getStringValue(outputData, "stdout")
+				: null;
+	if (!content) {
+		return null;
+	}
+	return { filePath, content };
+}
+
+function collectKnownReadContents(
+	parts: MessagePart[] | undefined,
+	currentIndex: number,
+): Map<string, string> {
+	const result = new Map<string, string>();
+	if (!parts) {
+		return result;
+	}
+	for (let i = 0; i < currentIndex; i += 1) {
+		const candidate = parts[i];
+		if (!isToolLikePart(candidate)) {
+			continue;
+		}
+		const read = extractReadFileContent(candidate);
+		if (!read) {
+			continue;
+		}
+		result.set(read.filePath, read.content);
+	}
+	return result;
+}
+
+function buildToolFilePreview(
+	part: ToolLikePart,
+	knownReadContents: Map<string, string>,
+): ToolFilePreview | null {
+	const toolName = getToolDisplayName(part).toLowerCase();
+	const inputData = toObjectRecord(part.input);
+	if (!inputData) {
+		return null;
+	}
+
+	if (toolName === "readfile") {
+		const filePath = getStringValue(inputData, "path");
+		if (!filePath) {
+			return null;
+		}
+
+		return {
+			kind: "read",
+			filePath,
+			oldContents: "",
+			newContents: "",
+			hasKnownBase: false,
+		};
+	}
+
+	if (toolName === "writefile" || toolName === "writefiles") {
+		const outputData = toObjectRecord(part.output);
+		const firstInputFile = getFirstObjectFromArray(inputData.files);
+		const filePath =
+			(firstInputFile && getStringValue(firstInputFile, "path")) ??
+			getStringValue(inputData, "path");
+		const newContents =
+			(firstInputFile && getStringValue(firstInputFile, "content")) ??
+			getStringValue(inputData, "content");
+		if (!filePath || newContents === null) {
+			return null;
+		}
+
+		const firstOutputFile = outputData
+			? getFirstObjectFromArray(outputData.files)
+			: null;
+		const oldContents =
+			(firstOutputFile && getStringValue(firstOutputFile, "oldContents")) ??
+			(outputData && getStringValue(outputData, "oldContents")) ??
+			knownReadContents.get(filePath) ??
+			"";
+		return {
+			kind: "write",
+			filePath,
+			oldContents,
+			newContents,
+			hasKnownBase:
+				((firstOutputFile && getStringValue(firstOutputFile, "oldContents")) ??
+					(outputData && getStringValue(outputData, "oldContents")) ??
+					knownReadContents.get(filePath)) !== undefined,
+		};
+	}
+
+	return null;
+}
+
+function ToolFileDiffPreview({ preview }: { preview: ToolFilePreview }) {
+	if (preview.kind !== "write") {
+		return null;
+	}
+
+	if (!preview.hasKnownBase) {
+		return (
+			<div className="mt-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+				Diff preview unavailable until prior file contents are known.
+			</div>
+		);
+	}
+
+	const hasDiff = preview.oldContents !== preview.newContents;
+	if (!hasDiff) {
+		return (
+			<div className="mt-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+				No visible content changes in this write operation.
+			</div>
+		);
+	}
+
+	return (
+		<div className="mt-2 overflow-hidden rounded-md border border-border/70 bg-background">
+			<div className="max-h-52 overflow-auto">
+				<WorkerPoolContextProvider
+					poolOptions={TOOL_DIFF_POOL_OPTIONS}
+					highlighterOptions={TOOL_DIFF_HIGHLIGHTER_OPTIONS}
+				>
+					<MultiFileDiff
+						oldFile={{ name: preview.filePath, contents: preview.oldContents }}
+						newFile={{ name: preview.filePath, contents: preview.newContents }}
+						options={{
+							themeType: "light",
+							theme: "github-light",
+							diffStyle: "unified",
+							hunkSeparators: "line-info",
+							disableFileHeader: true,
+							expandUnchanged: false,
+						}}
+						style={TOOL_DIFF_STYLE}
+					/>
+				</WorkerPoolContextProvider>
+			</div>
+		</div>
+	);
+}
+
+function buildFileToolTitle(part: ToolLikePart, preview: ToolFilePreview): string {
+	const isRunning = part.state === "input-streaming" || part.state === "input-available";
+	const isError = part.state === "output-error";
+	const isDenied = part.state === "output-denied";
+	if (preview.kind === "read") {
+		if (isRunning) return "Reading file";
+		if (isError) return "Failed to read file";
+		if (isDenied) return "Read denied";
+		return "Read file";
+	}
+	if (isRunning) return "Writing file";
+	if (isError) return "Failed to write file";
+	if (isDenied) return "Write denied";
+	return "Updated file";
+}
+
+function ToolFileActionPreview({
+	preview,
+	title,
+}: {
+	preview: ToolFilePreview;
+	title: string;
+}) {
+	const Icon = preview.kind === "read" ? FileText : FilePenLine;
+	const subtitle =
+		preview.kind === "read"
+			? "File was loaded for context."
+			: "Changes written to file.";
+
+	return (
+		<div className="mt-1.5 rounded-md border border-border/70 bg-muted/15">
+			<div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
+				<div className="flex items-center gap-1.5">
+					<Icon className="size-3.5 text-muted-foreground" />
+					<span className="text-xs font-medium text-foreground/90">{title}</span>
+				</div>
+				<span className="text-[11px] text-muted-foreground">{subtitle}</span>
+			</div>
+			<div className="px-3 py-2">
+				<p className="font-mono text-xs text-foreground/85 break-all">{preview.filePath}</p>
+				{preview.kind === "write" && <ToolFileDiffPreview preview={preview} />}
+			</div>
+		</div>
+	);
+}
+
+function buildToolTitle(part: ToolLikePart): string {
+	const toolState = getToolStateLabel(part.state);
+	const toolName = formatToolName(getToolDisplayName(part));
+	return `${toolState} ${toolName}`;
+}
+
+function renderAssistantPart(
+	part: MessagePart,
+	key: string,
+	messageParts?: MessagePart[],
+	partIndex = 0,
+) {
+	if (part.type === "text") {
+		return <MessageResponse key={key}>{part.text}</MessageResponse>;
+	}
+
+	if (part.type === "reasoning") {
+		return (
+			<div key={key} className="py-0.5 text-[12px] text-muted-foreground/85">
+				{part.text}
+			</div>
+		);
+	}
+
+	if (isToolLikePart(part)) {
+		const toolPart = part;
+		const inputSummary = summarizeToolInput(toolPart.input);
+		const outputSummary = summarizeToolOutput(toolPart);
+		const knownReadContents = collectKnownReadContents(messageParts, partIndex);
+		const filePreview = buildToolFilePreview(toolPart, knownReadContents);
+		const toolTitle = filePreview
+			? buildFileToolTitle(toolPart, filePreview)
+			: buildToolTitle(toolPart);
+		const detailLines = [inputSummary, outputSummary].filter(
+			(value): value is string => typeof value === "string" && value.trim().length > 0,
+		);
+		const shouldOpenByDefault =
+			toolPart.state !== "output-available" && toolPart.state !== "output-denied";
+
+		return (
+			<details
+				key={key}
+				open={shouldOpenByDefault}
+				className="group py-0.5 text-[13px]"
+			>
+				<summary className="flex cursor-pointer list-none items-center gap-1 text-foreground/75 [&::-webkit-details-marker]:hidden">
+					<span className="inline-block text-[11px] text-muted-foreground transition-transform group-open:rotate-90">
+						&gt;
+					</span>
+					<span>{toolTitle}</span>
+				</summary>
+				<div className="ml-4 mt-0.5 space-y-0.5 text-muted-foreground/85 leading-5">
+					{filePreview ? (
+						<ToolFileActionPreview preview={filePreview} title={toolTitle} />
+					) : detailLines.length > 0 ? (
+						detailLines.map((line) => <div key={`${key}-${line}`}>{line}</div>)
+					) : (
+						<div>No additional details</div>
+					)}
+				</div>
+			</details>
+		);
+	}
+
+	return null;
 }
 
 function PlanCodeBlock({
@@ -238,7 +667,6 @@ function ChatHeader({
 	const tabs: { label: string; value: ChatHeaderTab }[] = [
 		{ label: "Chat", value: "chat" },
 		{ label: "Plan", value: "plan" },
-		{ label: "Experiments", value: "experiments" },
 	];
 
 	return (
@@ -265,6 +693,26 @@ function ChatHeader({
 					))}
 				</div>
 			</div>
+		</div>
+	);
+}
+
+function TabEmptyState({
+	icon: Icon,
+	title,
+	description,
+}: {
+	icon: React.ComponentType<{ className?: string }>;
+	title: string;
+	description: string;
+}) {
+	return (
+		<div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-4 py-6 text-center">
+			<div className="mx-auto flex size-8 items-center justify-center rounded-md border border-border/80 bg-background/80">
+				<Icon className="size-4 text-muted-foreground" />
+			</div>
+			<p className="mt-3 text-sm font-medium text-foreground/90">{title}</p>
+			<p className="mt-1 text-sm text-muted-foreground/70">{description}</p>
 		</div>
 	);
 }
@@ -300,16 +748,27 @@ function ChatSession({
 		"Open the Plan tab to review the full plan.",
 		"Open the Plan tab to review the latest version.",
 	];
+	const [promptMode, setPromptMode] = useState<"build" | "plan" | "debug">("build");
+	const planExecutionContextRef = useRef<string | null>(null);
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
 				api: "http://localhost:3141/api/chat",
-				body: () => ({ sessionId, projectPath }),
+				body: () => {
+					const planContext = planExecutionContextRef.current;
+					planExecutionContextRef.current = null;
+					return {
+						sessionId,
+						projectPath,
+						mode: promptMode === "debug" ? "debug" : "build",
+						planContext: planContext ?? undefined,
+					};
+				},
 				prepareReconnectToStreamRequest: ({ id }) => ({
 					api: `http://localhost:3141/api/chat/${id}/stream`,
 				}),
 			}),
-		[sessionId, projectPath],
+		[sessionId, projectPath, promptMode],
 	);
 
 	const { messages, sendMessage, status } = useChat({
@@ -331,10 +790,6 @@ function ChatSession({
 		}
 	}, [status, sessionId, onStreamingChange]);
 
-	const [promptMode, setPromptMode] = useState<
-		"build" | "plan" | "debug" | "experiment"
-	>("build");
-
 	const [popoverOpen, setPopoverOpen] = useState(false);
 	const [popoverAnchor, setPopoverAnchor] = useState<Element | DOMRect | null>(
 		null,
@@ -347,6 +802,7 @@ function ChatSession({
 	const [planContent, setPlanContent] = useState<string | null>(null);
 	const [planLoading, setPlanLoading] = useState(false);
 	const [planChatMessages, setPlanChatMessages] = useState<UIMessage[]>([]);
+	const isChatBusy = status === "streaming" || status === "submitted";
 
 	const handleSubmit = useCallback(
 		({ text: formText }: { text: string }) => {
@@ -435,6 +891,17 @@ function ChatSession({
 		},
 		[handleSubmit],
 	);
+
+	const handleExecutePlan = useCallback(() => {
+		const trimmedPlan = planContent?.trim();
+		if (!trimmedPlan) return;
+		planExecutionContextRef.current = trimmedPlan;
+		setPromptMode("build");
+		setHeaderTab("chat");
+		sendMessage({
+			text: "Execute the approved implementation plan and build the project.",
+		});
+	}, [planContent, sendMessage]);
 
 	const handleAtTrigger = useCallback((rect: DOMRect, query: string) => {
 		setPopoverAnchor(rect);
@@ -539,21 +1006,25 @@ function ChatSession({
 							<Message from="assistant">
 								<MessageContent className="is-assistant">
 									<PlanMarkdown content={planContent} />
+									<div className="mt-3">
+										<button
+											type="button"
+											onClick={handleExecutePlan}
+											disabled={isChatBusy}
+											className="inline-flex h-8 items-center rounded-md border border-border bg-foreground/90 px-3 text-xs font-medium text-background transition-colors hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-60"
+										>
+											{isChatBusy ? "Executing..." : "Execute Plan"}
+										</button>
+									</div>
 								</MessageContent>
 							</Message>
 						) : (
-							<p className="text-sm text-muted-foreground/60">
-								No plan yet. Submit a prompt in Plan mode to generate one.
-							</p>
+							<TabEmptyState
+								icon={PencilLine}
+								title="No plan yet"
+								description="Submit a prompt in Plan mode to generate one."
+							/>
 						)}
-					</div>
-				</div>
-			) : headerTab === "experiments" ? (
-				<div className="flex-1 min-h-0 overflow-y-auto">
-					<div className="mx-auto w-full max-w-2xl px-6 pt-6 pb-4">
-						<p className="text-sm text-muted-foreground/60">
-							No experiments yet for this session.
-						</p>
 					</div>
 				</div>
 			) : hasMessages ? (
@@ -568,16 +1039,17 @@ function ChatSession({
 											: "is-assistant",
 									)}
 								>
-									{message.parts.map((part) => {
+									{message.parts.map((part, index) => {
+										const partKey = `${message.id}-${index}`;
 										if (part.type === "text") {
 											const isPlanPreview = openPlanHints.some((hint) =>
 												part.text.includes(hint),
 											);
 											return message.role === "user" ? (
-												<p key={`${message.id}-text`}>{part.text}</p>
+												<p key={partKey}>{part.text}</p>
 											) : isPlanPreview ? (
 												<div
-													key={`${message.id}-text`}
+													key={partKey}
 													className="w-full max-w-[680px] rounded-xl border border-border bg-background px-3 py-2.5"
 												>
 													<p className="text-[11px] text-muted-foreground">
@@ -621,11 +1093,24 @@ function ChatSession({
 													</button>
 												</div>
 											) : (
-												<MessageResponse key={`${message.id}-text`}>
-													{part.text}
-												</MessageResponse>
+												renderAssistantPart(
+													part,
+													partKey,
+													message.parts,
+													index,
+												)
 											);
 										}
+
+										if (message.role === "assistant") {
+											return renderAssistantPart(
+												part,
+												partKey,
+												message.parts,
+												index,
+											);
+										}
+
 										return null;
 									})}
 									{message.role === "assistant" &&
@@ -695,12 +1180,7 @@ function ChatSession({
 							<Select
 								value={promptMode}
 								onValueChange={(v) => {
-									if (
-										v === "build" ||
-										v === "plan" ||
-										v === "debug" ||
-										v === "experiment"
-									)
+									if (v === "build" || v === "plan" || v === "debug")
 										setPromptMode(v);
 								}}
 								aria-label="Select prompt mode"
@@ -825,6 +1305,23 @@ export default function Home({
 		{},
 	);
 
+	const refreshGitMetadata = useCallback(async () => {
+		try {
+			const [nextBranches, nextChanges] = await Promise.all([
+				getGitBranches(projectPath),
+				getGitStatus(projectPath),
+			]);
+			setBranches(nextBranches);
+			const active = nextBranches.find((branch) => branch.current);
+			setCurrentBranch(active?.name ?? null);
+			setChangesCount(nextChanges.length);
+		} catch {
+			setBranches([]);
+			setCurrentBranch(null);
+			setChangesCount(0);
+		}
+	}, [projectPath]);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: sidebarKey triggers refetch for title updates
 	useEffect(() => {
 		getSessions(projectPath).then((sessions) => {
@@ -837,15 +1334,29 @@ export default function Home({
 	}, [projectPath, sidebarKey]);
 
 	useEffect(() => {
-		getGitBranches(projectPath).then((b) => {
-			setBranches(b);
-			const active = b.find((br) => br.current);
-			if (active) setCurrentBranch(active.name);
-		});
-		getGitStatus(projectPath).then((changes) => {
-			setChangesCount(changes.length);
-		});
-	}, [projectPath]);
+		let disposed = false;
+
+		const runRefresh = () => {
+			if (disposed || document.visibilityState !== "visible") {
+				return;
+			}
+			void refreshGitMetadata();
+		};
+
+		runRefresh();
+		const intervalId = window.setInterval(runRefresh, 3000);
+		const onFocus = () => runRefresh();
+		const onVisibilityChange = () => runRefresh();
+		window.addEventListener("focus", onFocus);
+		document.addEventListener("visibilitychange", onVisibilityChange);
+
+		return () => {
+			disposed = true;
+			window.clearInterval(intervalId);
+			window.removeEventListener("focus", onFocus);
+			document.removeEventListener("visibilitychange", onVisibilityChange);
+		};
+	}, [refreshGitMetadata]);
 
 	useEffect(() => {
 		getActiveSession(projectPath).then((result) => {

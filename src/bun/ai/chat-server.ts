@@ -1,19 +1,18 @@
 import { createMistral } from "@ai-sdk/mistral";
 import {
 	UI_MESSAGE_STREAM_HEADERS,
-	convertToModelMessages,
 	generateText,
-	streamText,
 	type UIMessage,
 } from "ai";
-
-const mistral = createMistral({
-	apiKey: "m4bRvDtPFUztCe1oGKtYZ20kBw204Iud",
-});
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { stdin as input, stdout as output } from "node:process";
+import { createInterface } from "node:readline/promises";
 
 import { and, desc, eq, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getDb } from "../db";
+import { generateBuildResponse } from "./build-agent";
 import { generatePlan } from "./plan-agent";
 import {
 	historyEvents as historyEventsTable,
@@ -23,6 +22,14 @@ import {
 } from "../db/schema";
 
 const CHAT_PORT = 3141;
+const DEBUG_SYSTEM_INSTRUCTION = `You are in Debug Mode.
+Prioritize root-cause analysis, reproduction steps, and minimal safe fixes.
+When proposing changes, focus on regressions, failure modes, and concrete verification steps.`;
+const PLAN_EXECUTION_SYSTEM_PREFIX = `Use the approved implementation plan below as mandatory context for this build execution.
+
+Execute the steps in order, keep changes scoped to the plan, and call out any blockers immediately.
+
+Approved plan:`;
 
 type ActiveStream = {
 	chunks: string[];
@@ -32,8 +39,157 @@ type ActiveStream = {
 };
 
 const activeStreams = new Map<string, ActiveStream>();
+const MISTRAL_API_KEY_ENV_VAR = "MISTRAL_API_KEY";
+const CONFIG_DIRECTORY = ".golb";
+const CONFIG_FILE_NAME = "config.json";
 
-const SYSTEM_PROMPT = `You are Golb, an expert AI coding assistant embedded in a desktop IDE. You help developers write, debug, and understand code. Be concise, direct, and technically accurate. When writing code, use best practices and explain your reasoning briefly.`;
+type GolbConfig = {
+	mistralApiKey?: string;
+};
+
+let cachedMistralApiKey: string | null = null;
+let cachedMistralClient: ReturnType<typeof createMistral> | null = null;
+let mistralClientPromise: Promise<ReturnType<typeof createMistral>> | null = null;
+
+function normalizeApiKey(value: string | null | undefined): string | null {
+	const trimmed = value?.trim();
+	return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function isMissingMistralApiKeyError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message.toLowerCase().includes("mistral api key is required")
+	);
+}
+
+function getConfigFilePath(): string {
+	const homeDirectory = Bun.env.HOME ?? process.env.HOME;
+	if (!homeDirectory || homeDirectory.trim().length === 0) {
+		throw new Error(
+			"Unable to resolve HOME directory for Mistral API key storage.",
+		);
+	}
+	return join(homeDirectory, CONFIG_DIRECTORY, CONFIG_FILE_NAME);
+}
+
+async function loadSavedMistralApiKey(): Promise<string | null> {
+	try {
+		const raw = await readFile(getConfigFilePath(), "utf8");
+		const parsed = JSON.parse(raw) as GolbConfig;
+		return normalizeApiKey(parsed.mistralApiKey);
+	} catch {
+		return null;
+	}
+}
+
+async function saveMistralApiKey(apiKey: string): Promise<void> {
+	const configFilePath = getConfigFilePath();
+	let nextConfig: GolbConfig = {};
+
+	try {
+		const existingRaw = await readFile(configFilePath, "utf8");
+		const parsed = JSON.parse(existingRaw);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			nextConfig = parsed as GolbConfig;
+		}
+	} catch {
+		// If config doesn't exist or is invalid, overwrite with a minimal valid config.
+	}
+
+	nextConfig.mistralApiKey = apiKey;
+	await mkdir(dirname(configFilePath), { recursive: true });
+	await writeFile(configFilePath, `${JSON.stringify(nextConfig, null, 2)}\n`);
+}
+
+async function promptForMistralApiKey(): Promise<string> {
+	if (!input.isTTY || !output.isTTY) {
+		throw new Error(
+			"Mistral API key is required. Set MISTRAL_API_KEY or start Golb from an interactive terminal once to save it.",
+		);
+	}
+
+	const readline = createInterface({ input, output });
+	try {
+		const answer = await readline.question("Enter your Mistral API key: ");
+		const apiKey = normalizeApiKey(answer);
+		if (!apiKey) {
+			throw new Error("Mistral API key cannot be empty.");
+		}
+		return apiKey;
+	} finally {
+		readline.close();
+	}
+}
+
+async function resolveMistralApiKey(allowPrompt = true): Promise<string> {
+	if (cachedMistralApiKey) {
+		return cachedMistralApiKey;
+	}
+
+	const fromEnv = normalizeApiKey(
+		Bun.env[MISTRAL_API_KEY_ENV_VAR] ?? process.env[MISTRAL_API_KEY_ENV_VAR],
+	);
+	if (fromEnv) {
+		cachedMistralApiKey = fromEnv;
+		return fromEnv;
+	}
+
+	const fromConfig = await loadSavedMistralApiKey();
+	if (fromConfig) {
+		cachedMistralApiKey = fromConfig;
+		return fromConfig;
+	}
+
+	if (!allowPrompt) {
+		throw new Error(
+			"Mistral API key is required. Configure it from the app before continuing.",
+		);
+	}
+
+	const promptedApiKey = await promptForMistralApiKey();
+	await saveMistralApiKey(promptedApiKey);
+	cachedMistralApiKey = promptedApiKey;
+	return promptedApiKey;
+}
+
+async function getMistralClient(
+	allowPrompt = true,
+): Promise<ReturnType<typeof createMistral>> {
+	if (cachedMistralClient) {
+		return cachedMistralClient;
+	}
+
+	if (!mistralClientPromise) {
+		mistralClientPromise = (async () => {
+			const apiKey = await resolveMistralApiKey(allowPrompt);
+			const client = createMistral({ apiKey });
+			cachedMistralClient = client;
+			return client;
+		})().finally(() => {
+			mistralClientPromise = null;
+		});
+	}
+
+	return mistralClientPromise;
+}
+
+async function hasConfiguredMistralApiKey(): Promise<boolean> {
+	const fromEnv = normalizeApiKey(
+		Bun.env[MISTRAL_API_KEY_ENV_VAR] ?? process.env[MISTRAL_API_KEY_ENV_VAR],
+	);
+	if (fromEnv) {
+		return true;
+	}
+	const fromConfig = await loadSavedMistralApiKey();
+	return fromConfig !== null;
+}
+
+async function setMistralApiKey(apiKey: string): Promise<void> {
+	await saveMistralApiKey(apiKey);
+	cachedMistralApiKey = apiKey;
+	cachedMistralClient = createMistral({ apiKey });
+}
 
 function corsHeaders(): Record<string, string> {
 	return {
@@ -124,6 +280,16 @@ async function generateSessionTitle(
 	sessionId: string,
 	firstUserMessage: string,
 ): Promise<void> {
+	let mistral: ReturnType<typeof createMistral>;
+	try {
+		mistral = await getMistralClient(false);
+	} catch (error) {
+		if (isMissingMistralApiKeyError(error)) {
+			return;
+		}
+		throw error;
+	}
+
 	const { text } = await generateText({
 		model: mistral("mistral-small-latest"),
 		prompt: `Generate a very short title (2 to 4 words max) for a chat conversation that starts with this user message. Return ONLY the title, no quotes, no punctuation at the end.\n\nUser message: "${firstUserMessage}"`,
@@ -147,19 +313,57 @@ async function handleChatRequest(req: Request): Promise<Response> {
 		messages,
 		sessionId,
 		projectPath,
+		mode,
+		planContext,
 	}: {
 		messages: UIMessage[];
 		sessionId: string;
 		projectPath: string;
+		mode?: "build" | "debug";
+		planContext?: string;
 	} = body;
 
 	const projectId = await ensureProject(projectPath);
 	await ensureSession(sessionId, projectId);
 
-	const result = streamText({
-		model: mistral("mistral-medium-latest"),
-		system: SYSTEM_PROMPT,
-		messages: await convertToModelMessages(messages),
+	const requestMode = mode === "debug" ? "debug" : "build";
+	const normalizedPlanContext =
+		typeof planContext === "string" && planContext.trim().length > 0
+			? planContext.trim()
+			: null;
+	const debugSystemMessage: UIMessage | null =
+		requestMode === "debug"
+			? {
+					id: `debug-system-${sessionId}`,
+					role: "system",
+					parts: [{ type: "text", text: DEBUG_SYSTEM_INSTRUCTION }],
+				}
+			: null;
+	const planSystemMessage: UIMessage | null =
+		requestMode === "build" && normalizedPlanContext !== null
+			? {
+					id: `plan-system-${sessionId}`,
+					role: "system",
+					parts: [
+						{
+							type: "text",
+							text: `${PLAN_EXECUTION_SYSTEM_PREFIX}\n${normalizedPlanContext}`,
+						},
+					],
+				}
+			: null;
+	const injectedSystemMessages: UIMessage[] = [
+		debugSystemMessage,
+		planSystemMessage,
+	].filter((message): message is UIMessage => message !== null);
+	const generationMessages =
+		injectedSystemMessages.length > 0
+			? [...injectedSystemMessages, ...messages]
+			: messages;
+
+	const result = await generateBuildResponse({
+		projectPath,
+		messages: generationMessages,
 	});
 
 	return result.toUIMessageStreamResponse({
@@ -196,9 +400,18 @@ async function handleChatRequest(req: Request): Promise<Response> {
 		},
 		onFinish: async ({ messages: finalMessages }) => {
 			try {
-				await saveMessages(sessionId, finalMessages);
+				const injectedSystemMessageIds = new Set(
+					injectedSystemMessages.map((message) => message.id),
+				);
+				const messagesToPersist =
+					injectedSystemMessageIds.size > 0
+						? finalMessages.filter((message) =>
+								!injectedSystemMessageIds.has(message.id),
+							)
+						: finalMessages;
+				await saveMessages(sessionId, messagesToPersist);
 
-				const firstUserMsg = finalMessages.find((m) => m.role === "user");
+				const firstUserMsg = messagesToPersist.find((m) => m.role === "user");
 				if (firstUserMsg) {
 					const textPart = firstUserMsg.parts.find(
 						(p): p is Extract<typeof p, { type: "text" }> => p.type === "text",
@@ -336,6 +549,36 @@ async function handlePlanRequest(req: Request): Promise<Response> {
 	});
 }
 
+async function handleMistralKeyStatusRequest(): Promise<Response> {
+	const configured = await hasConfiguredMistralApiKey();
+	return new Response(JSON.stringify({ configured }), {
+		status: 200,
+		headers: { ...corsHeaders(), "Content-Type": "application/json" },
+	});
+}
+
+async function handleMistralKeySaveRequest(req: Request): Promise<Response> {
+	const body = (await req.json()) as { apiKey?: unknown };
+	const normalizedApiKey =
+		typeof body.apiKey === "string" ? normalizeApiKey(body.apiKey) : null;
+
+	if (!normalizedApiKey) {
+		return new Response(
+			JSON.stringify({ error: "A non-empty Mistral API key is required." }),
+			{
+				status: 400,
+				headers: { ...corsHeaders(), "Content-Type": "application/json" },
+			},
+		);
+	}
+
+	await setMistralApiKey(normalizedApiKey);
+	return new Response(JSON.stringify({ ok: true }), {
+		status: 200,
+		headers: { ...corsHeaders(), "Content-Type": "application/json" },
+	});
+}
+
 export function startChatServer(): void {
 	Bun.serve({
 		port: CHAT_PORT,
@@ -450,6 +693,36 @@ export function startChatServer(): void {
 						JSON.stringify({ error: message }),
 						{
 							status,
+							headers: { ...corsHeaders(), "Content-Type": "application/json" },
+						},
+					);
+				}
+			}
+
+			if (url.pathname === "/api/mistral-key" && req.method === "GET") {
+				try {
+					return await handleMistralKeyStatusRequest();
+				} catch (err) {
+					console.error("Mistral key status error:", err);
+					return new Response(
+						JSON.stringify({ error: "Failed to read Mistral key status" }),
+						{
+							status: 500,
+							headers: { ...corsHeaders(), "Content-Type": "application/json" },
+						},
+					);
+				}
+			}
+
+			if (url.pathname === "/api/mistral-key" && req.method === "POST") {
+				try {
+					return await handleMistralKeySaveRequest(req);
+				} catch (err) {
+					console.error("Mistral key save error:", err);
+					return new Response(
+						JSON.stringify({ error: "Failed to save Mistral API key" }),
+						{
+							status: 500,
 							headers: { ...corsHeaders(), "Content-Type": "application/json" },
 						},
 					);

@@ -35,10 +35,16 @@ export function TitleBar() {
 
 		let cancelled = false;
 		const refreshTotals = async () => {
+			if (document.visibilityState !== "visible") {
+				return;
+			}
 			try {
-				const files = await getGitFileDiffs(projectPath, false);
+				const [unstagedFiles, stagedFiles] = await Promise.all([
+					getGitFileDiffs(projectPath, false),
+					getGitFileDiffs(projectPath, true),
+				]);
 				if (cancelled) return;
-				const totals = files.reduce(
+				const totals = [...unstagedFiles, ...stagedFiles].reduce(
 					(acc, file) => {
 						acc.additions += file.additions;
 						acc.deletions += file.deletions;
@@ -55,16 +61,21 @@ export function TitleBar() {
 		};
 
 		void refreshTotals();
-		const intervalId = window.setInterval(refreshTotals, 5000);
+		const intervalId = window.setInterval(refreshTotals, 3000);
 		const onFocus = () => {
 			void refreshTotals();
 		};
+		const onVisibilityChange = () => {
+			void refreshTotals();
+		};
 		window.addEventListener("focus", onFocus);
+		document.addEventListener("visibilitychange", onVisibilityChange);
 
 		return () => {
 			cancelled = true;
 			window.clearInterval(intervalId);
 			window.removeEventListener("focus", onFocus);
+			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
 	}, [projectPath]);
 

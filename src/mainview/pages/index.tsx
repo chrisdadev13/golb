@@ -4,13 +4,22 @@ import {
   FlaskConical,
   FolderCode,
   FolderOpen,
+  FolderPlus,
   LayoutGrid,
   List,
   PencilLine,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -67,6 +76,85 @@ export default function IndexPage() {
   const mentionInputRef = useRef<MentionInputHandle>(null);
   const popoverHandleRef = useRef<ContextPopoverHandle>(null);
   const contextButtonRef = useRef<Element | null>(null);
+  const [mistralDialogOpen, setMistralDialogOpen] = useState(false);
+  const [mistralKeyConfigured, setMistralKeyConfigured] = useState<boolean | null>(
+    null,
+  );
+  const [mistralApiKey, setMistralApiKey] = useState("");
+  const [mistralApiKeyError, setMistralApiKeyError] = useState<string | null>(
+    null,
+  );
+  const [isSavingMistralApiKey, setIsSavingMistralApiKey] = useState(false);
+
+  const refreshMistralStatus = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:3141/api/mistral-key");
+      if (!response.ok) {
+        setMistralKeyConfigured(null);
+        return;
+      }
+      const payload = (await response.json()) as { configured?: boolean };
+      setMistralKeyConfigured(payload.configured === true);
+    } catch {
+      setMistralKeyConfigured(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshMistralStatus();
+  }, [refreshMistralStatus]);
+
+  useEffect(() => {
+    if (mistralDialogOpen) {
+      setMistralApiKey("");
+      setMistralApiKeyError(null);
+    }
+  }, [mistralDialogOpen]);
+
+  const handleSaveMistralApiKey = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const normalizedApiKey = mistralApiKey.trim();
+      if (!normalizedApiKey) {
+        setMistralApiKeyError("Please enter a Mistral API key.");
+        return;
+      }
+
+      setIsSavingMistralApiKey(true);
+      setMistralApiKeyError(null);
+
+      void (async () => {
+        try {
+          const response = await fetch("http://localhost:3141/api/mistral-key", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey: normalizedApiKey }),
+          });
+          if (!response.ok) {
+            let message = `Failed to save API key (${response.status})`;
+            try {
+              const payload = (await response.json()) as { error?: string };
+              if (payload.error) {
+                message = payload.error;
+              }
+            } catch {
+              // Keep status-based message when body is not JSON.
+            }
+            setMistralApiKeyError(message);
+            return;
+          }
+
+          setMistralKeyConfigured(true);
+          setMistralDialogOpen(false);
+        } catch {
+          setMistralApiKeyError("Unable to save Mistral API key right now.");
+        } finally {
+          setIsSavingMistralApiKey(false);
+        }
+      })();
+    },
+    [mistralApiKey],
+  );
 
   const filtered = useMemo(() => {
     if (!search) return projects;
@@ -87,6 +175,10 @@ export default function IndexPage() {
     const paths = await openFolderDialog();
     if (!paths || paths.length === 0) return;
     openProject(paths[0]);
+  };
+
+  const handleCreateProject = async () => {
+    await handleOpenFolder();
   };
 
   const handleSubmit = useCallback(({ text: formText }: { text: string }) => {
@@ -279,6 +371,14 @@ export default function IndexPage() {
               >
                 @ Context
               </PromptInputButton>
+              <PromptInputButton
+                size="xs"
+                variant="outline"
+                className="text-xs! h-6!"
+                onClick={() => setMistralDialogOpen(true)}
+              >
+                {mistralKeyConfigured === true ? "Update API Key" : "Set API Key"}
+              </PromptInputButton>
             </PromptInputTools>
             <PromptInputSubmit
               size="icon-xs"
@@ -297,15 +397,65 @@ export default function IndexPage() {
           onUploadImage={handleUploadImage}
           popoverRef={popoverHandleRef}
         />
+        <Dialog open={mistralDialogOpen} onOpenChange={setMistralDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mistral API Key</DialogTitle>
+              <DialogDescription>
+                Enter the API key used for AI requests.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              id="index-mistral-api-key-form"
+              className="space-y-3 px-6"
+              onSubmit={handleSaveMistralApiKey}
+            >
+              <Input
+                autoFocus
+                type="password"
+                placeholder="mistral api key"
+                value={mistralApiKey}
+                onChange={(event) => setMistralApiKey(event.currentTarget.value)}
+              />
+              {mistralApiKeyError && (
+                <p className="text-xs text-destructive">{mistralApiKeyError}</p>
+              )}
+            </form>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setMistralDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                form="index-mistral-api-key-form"
+                disabled={isSavingMistralApiKey}
+              >
+                {isSavingMistralApiKey ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       <Separator className="my-8" />
       <div>
         <div className="flex items-center justify-between w-full">
           <p className="text-sm text-foreground">Open existing project</p>
-          <Button onClick={handleOpenFolder} variant="outline" size="sm">
-            <FolderOpen className="size-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Open folder</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleCreateProject} size="sm">
+              <FolderPlus className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium">New project</span>
+            </Button>
+            <Button onClick={handleOpenFolder} variant="outline" size="sm">
+              <FolderOpen className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Open folder</span>
+            </Button>
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-2">
           <Input

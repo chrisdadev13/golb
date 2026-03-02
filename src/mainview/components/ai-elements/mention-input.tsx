@@ -405,9 +405,26 @@ export function MentionInput({
 
       e.preventDefault();
       const text = e.clipboardData.getData("text/plain");
-      if (text) {
-        document.execCommand("insertText", false, text);
+      if (!text) return;
+
+      const el = editorRef.current;
+      const sel = window.getSelection();
+      if (!el || !sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+        el?.focus();
+        return;
       }
+
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      // Trigger native input observers to keep mention state in sync.
+      el.dispatchEvent(new Event("input", { bubbles: true }));
     },
     [onPasteFiles],
   );
